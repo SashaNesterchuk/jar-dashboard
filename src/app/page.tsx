@@ -1,63 +1,91 @@
-import Image from "next/image";
+import { AnalyticsCard } from "@/components/analytics-card";
 
-export default function Home() {
+interface AnalyticsData {
+  dau: {
+    value: number;
+    previous: number;
+    delta: number;
+    change: string;
+  };
+  wau: {
+    value: number;
+    previous: number;
+    delta: number;
+    change: string;
+  };
+  mau: {
+    value: number;
+    previous: number;
+    delta: number;
+    change: string;
+  };
+}
+
+async function getAnalyticsData(): Promise<AnalyticsData> {
+  try {
+    // In server components, we can use relative URLs
+    const response = await fetch(
+      `${
+        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+      }/api/analytics`,
+      {
+        cache: "no-store", // Always fetch fresh data
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch analytics data");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching analytics:", error);
+    // Return zero values on error
+    return {
+      dau: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
+      wau: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
+      mau: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
+    };
+  }
+}
+
+export default async function Home() {
+  const analytics = await getAnalyticsData();
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-zinc-50 font-sans dark:bg-black">
+      <main className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-black dark:text-zinc-50">
+            Analytics Dashboard
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Key metrics for Mind Jar app
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          <AnalyticsCard
+            title="Daily Active Users"
+            value={analytics.dau.value}
+            change={analytics.dau.change}
+            delta={analytics.dau.delta}
+            period="vs Yesterday"
+          />
+          <AnalyticsCard
+            title="Weekly Active Users"
+            value={analytics.wau.value}
+            change={analytics.wau.change}
+            delta={analytics.wau.delta}
+            period="vs Previous 7 days"
+          />
+          <AnalyticsCard
+            title="Monthly Active Users"
+            value={analytics.mau.value}
+            change={analytics.mau.change}
+            delta={analytics.mau.delta}
+            period="vs Previous 30 days"
+          />
         </div>
       </main>
     </div>
