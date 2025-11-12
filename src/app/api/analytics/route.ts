@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 const POSTHOG_HOST = process.env.POSTHOG_HOST || "https://eu.posthog.com";
 const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID || "50390";
-const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY;
+const POSTHOG_API_KEY = "phx_13ZYZ8irTB5GrP90S58G2OCuj85gr4UtrnyPpv7ojTI4b7RX";
 
 if (!POSTHOG_API_KEY) {
   console.error("POSTHOG_API_KEY is not set");
@@ -20,22 +20,24 @@ async function queryPostHog(query: string): Promise<number> {
     throw new Error("POSTHOG_API_KEY is not configured");
   }
 
-  const response = await fetch(
-    `${POSTHOG_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query/`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${POSTHOG_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query: {
-          kind: "HogQLQuery",
-          query,
-        },
-      }),
-    }
-  );
+  // Trim any whitespace from API key
+  const apiKey = POSTHOG_API_KEY.trim();
+  const url = `${POSTHOG_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query/`;
+  const body = JSON.stringify({
+    query: {
+      kind: "HogQLQuery",
+      query,
+    },
+  });
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body,
+  });
 
   if (!response.ok) {
     const errorText = await response.text();
