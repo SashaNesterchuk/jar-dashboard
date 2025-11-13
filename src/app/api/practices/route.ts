@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const POSTHOG_HOST = process.env.POSTHOG_HOST || "https://eu.posthog.com";
-const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID || "50390";
-const POSTHOG_API_KEY = "phx_13ZYZ8irTB5GrP90S58G2OCuj85gr4UtrnyPpv7ojTI4b7RX";
+const POSTHOG_HOST = process.env.POSTHOG_HOST;
+const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
+const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY;
 
 if (!POSTHOG_API_KEY) {
   console.error("POSTHOG_API_KEY is not set");

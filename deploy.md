@@ -1,0 +1,2 @@
+- `vercel inspect mindjar-dashboard-cvv80t3y2-mindjarapp-9839s-projects.vercel.app --logs`
+- `vercel redeploy mindjar-dashboard-cvv80t3y2-mindjarapp-9839s-projects.vercel.app`
