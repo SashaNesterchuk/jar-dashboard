@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,13 @@ interface AnalyticsData {
 }
 async function getAnalyticsData(): Promise<AnalyticsData> {
   try {
+    // Get cookies from the request to pass to the API
+    const cookieStore = await cookies();
+    const cookieHeader = cookieStore
+      .getAll()
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
+
     // In server components, we can use relative URLs
     const response = await fetch(
       `${
@@ -39,6 +47,7 @@ async function getAnalyticsData(): Promise<AnalyticsData> {
       }/api/analytics`,
       {
         cache: "no-store", // Always fetch fresh data
+        headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
       }
     );
 
