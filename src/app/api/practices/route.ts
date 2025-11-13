@@ -201,6 +201,65 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    if (type === "trial-conversions") {
+      const trialConversionsQuery = `
+        SELECT
+          coalesce(
+            JSONExtractString(properties,'source_practice_id'),
+            JSONExtractString(properties,'practice_event_id'),
+            JSONExtractString(properties,'event_id')
+          ) AS event_id,
+          any(JSONExtractString(properties,'source_practice_name')) AS practice_name,
+          any(JSONExtractString(properties,'practice_type')) AS practice_type,
+          coalesce(JSONExtractString(properties,'selected_period'), '') AS selected_period,
+          count() AS trials_started
+        FROM events
+        WHERE event IN ('price_screen_action', 'onboarding_paywall_action')
+          AND JSONExtractString(properties,'action') = 'trial_started'
+          AND ${baseFilters}
+          AND coalesce(
+            JSONExtractString(properties,'source_practice_id'),
+            JSONExtractString(properties,'practice_event_id'),
+            JSONExtractString(properties,'event_id')
+          ) IS NOT NULL
+          AND coalesce(
+            JSONExtractString(properties,'source_practice_id'),
+            JSONExtractString(properties,'practice_event_id'),
+            JSONExtractString(properties,'event_id')
+          ) != ''
+        GROUP BY event_id, selected_period
+        ORDER BY trials_started DESC
+      `;
+
+      const trialResults = await queryPostHogArray(trialConversionsQuery);
+
+      const trialData = trialResults.map((row) => {
+        const eventId = String(row[0] || "");
+        const practiceName = String(row[1] || "") || eventId;
+        const practiceType = String(row[2] || "") || "practice";
+        const periodRaw = String(row[3] || "");
+        const countValue =
+          typeof row[4] === "number" ? row[4] : Number(row[4]) || 0;
+
+        const period =
+          periodRaw === ""
+            ? "unknown"
+            : periodRaw.toLowerCase() === "yearly"
+            ? "annual"
+            : periodRaw.toLowerCase();
+
+        return {
+          eventId,
+          title: practiceName,
+          type: practiceType,
+          period,
+          count: countValue,
+        };
+      });
+
+      return NextResponse.json(trialData.sort((a, b) => b.count - a.count));
+    }
+
     // Query for completed practices grouped by event_id
     const completedQuery = `
       SELECT 

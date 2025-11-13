@@ -112,6 +112,14 @@ export const schema = z.object({
   finished: z.number(), // completions count
 });
 
+export const trialSchema = z.object({
+  eventId: z.string(),
+  title: z.string(),
+  type: z.string(),
+  period: z.string(),
+  count: z.number(),
+});
+
 function formatPracticeType(value?: string | null) {
   if (!value) {
     return "Practice";
@@ -133,6 +141,29 @@ function formatPracticeType(value?: string | null) {
 
   if (typeLabels[normalized]) {
     return typeLabels[normalized];
+  }
+
+  return normalized
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatPeriodLabel(value?: string) {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const normalized = value.toLowerCase();
+  if (normalized === "monthly") {
+    return "Monthly";
+  }
+  if (normalized === "annual" || normalized === "yearly") {
+    return "Annual";
+  }
+  if (normalized === "unknown") {
+    return "Unknown";
   }
 
   return normalized
@@ -202,6 +233,11 @@ export function PracticeTable({}: {}) {
   const [timeRange, setTimeRange] = React.useState("7d");
   const [data, setData] = React.useState<z.infer<typeof schema>[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [trialRows, setTrialRows] = React.useState<
+    z.infer<typeof trialSchema>[]
+  >([]);
+  const [isTrialLoading, setIsTrialLoading] = React.useState(true);
+  const [trialError, setTrialError] = React.useState<string | null>(null);
   const [practiceTypesData, setPracticeTypesData] = React.useState<
     Record<string, number>
   >({});
@@ -271,6 +307,64 @@ export function PracticeTable({}: {}) {
     }
   }, []);
 
+  const fetchTrialConversionData = React.useCallback(async (range: string) => {
+    setIsTrialLoading(true);
+    setTrialError(null);
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        (typeof window !== "undefined"
+          ? window.location.origin
+          : "http://localhost:3000");
+      const response = await fetch(
+        `${baseUrl}/api/practices?type=trial-conversions&timeRange=${range}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch trial conversion data");
+      }
+
+      const apiData = (await response.json()) as Array<{
+        eventId: string;
+        title: string;
+        type: string;
+        period: string;
+        count: number;
+      }>;
+
+      const normalizedData = apiData
+        .map((item) => {
+          const eventId = (item.eventId || "").trim();
+          if (!eventId) {
+            return null;
+          }
+
+          return {
+            eventId,
+            title: item.title?.trim() || eventId,
+            type: formatPracticeType(item.type),
+            period: formatPeriodLabel(item.period),
+            count: Number(item.count) || 0,
+          };
+        })
+        .filter((value): value is z.infer<typeof trialSchema> => value !== null)
+        .sort((a, b) => b.count - a.count);
+
+      setTrialRows(normalizedData);
+    } catch (error) {
+      console.error("Error fetching trial conversion data:", error);
+      setTrialRows([]);
+      setTrialError(
+        error instanceof Error ? error.message : "Unknown error fetching trials"
+      );
+    } finally {
+      setIsTrialLoading(false);
+    }
+  }, []);
+
   const fetchPracticeTypesData = React.useCallback(async (range: string) => {
     try {
       const baseUrl =
@@ -311,7 +405,13 @@ export function PracticeTable({}: {}) {
   React.useEffect(() => {
     fetchPracticesData(timeRange);
     fetchPracticeTypesData(timeRange);
-  }, [timeRange, fetchPracticesData, fetchPracticeTypesData]);
+    fetchTrialConversionData(timeRange);
+  }, [
+    timeRange,
+    fetchPracticesData,
+    fetchPracticeTypesData,
+    fetchTrialConversionData,
+  ]);
   const sortableId = React.useId();
   const sensors = useSensors(
     useSensor(MouseSensor, {}),
@@ -369,17 +469,13 @@ export function PracticeTable({}: {}) {
           <SelectContent>
             <SelectItem value="practices">Practices</SelectItem>
             <SelectItem value="practice-types">Practice types</SelectItem>
-            <SelectItem value="key-personnel">Key Personnel</SelectItem>
-            <SelectItem value="focus-documents">Focus Documents</SelectItem>
+            <SelectItem value="trial-table">Trial Table</SelectItem>
           </SelectContent>
         </Select>
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
           <TabsTrigger value="practices">Practices</TabsTrigger>
           <TabsTrigger value="practice-types">Practice types</TabsTrigger>
-          <TabsTrigger value="key-personnel">
-            Key Personnel <Badge variant="secondary">2</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="focus-documents">Focus Documents</TabsTrigger>
+          <TabsTrigger value="trial-table">Trial Table</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-2">
           <ToggleGroup
@@ -577,35 +673,60 @@ export function PracticeTable({}: {}) {
           />
         </div>
       </TabsContent>
-      <TabsContent value="key-personnel" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-      </TabsContent>
-      <TabsContent
-        value="focus-documents"
-        className="flex flex-col px-4 lg:px-6"
-      >
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
+      <TabsContent value="trial-table" className="flex flex-col px-4 lg:px-6">
+        <div className="flex flex-1 flex-col gap-4">
+          <div className="overflow-hidden rounded-lg border">
+            {isTrialLoading ? (
+              <div className="flex h-64 items-center justify-center">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <IconLoader className="h-4 w-4 animate-spin" />
+                  Loading trial conversions...
+                </div>
+              </div>
+            ) : trialRows.length > 0 ? (
+              <Table>
+                <TableHeader className="bg-muted sticky top-0 z-10">
+                  <TableRow>
+                    <TableHead className="w-32">Event ID</TableHead>
+                    <TableHead className="w-64">Title</TableHead>
+                    <TableHead className="w-32">Type</TableHead>
+                    <TableHead className="w-32">Period</TableHead>
+                    <TableHead className="w-32 text-right">
+                      Trials Started
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {trialRows.map((row) => (
+                    <TableRow key={`${row.eventId}-${row.period}`}>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {row.eventId}
+                      </TableCell>
+                      <TableCell className="truncate">{row.title}</TableCell>
+                      <TableCell>{row.type}</TableCell>
+                      <TableCell>{row.period}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {row.count.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="flex h-64 items-center justify-center">
+                <div className="text-sm text-muted-foreground">
+                  No trial conversion data for this range.
+                </div>
+              </div>
+            )}
+          </div>
+          {trialError ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {trialError}
+            </div>
+          ) : null}
+        </div>
       </TabsContent>
     </Tabs>
   );
 }
-
-const chartData = [
-  { month: "January", desktop: 186, mobile: 80 },
-  { month: "February", desktop: 305, mobile: 200 },
-  { month: "March", desktop: 237, mobile: 120 },
-  { month: "April", desktop: 73, mobile: 190 },
-  { month: "May", desktop: 209, mobile: 130 },
-  { month: "June", desktop: 214, mobile: 140 },
-];
-
-const chartConfig = {
-  desktop: {
-    label: "Desktop",
-    color: "var(--primary)",
-  },
-  mobile: {
-    label: "Mobile",
-    color: "var(--primary)",
-  },
-} satisfies ChartConfig;

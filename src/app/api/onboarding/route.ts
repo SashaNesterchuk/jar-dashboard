@@ -15,6 +15,47 @@ interface PostHogQueryResponse {
   };
 }
 
+async function queryPostHogArray(
+  query: string
+): Promise<Array<Array<number | string>>> {
+  if (!POSTHOG_API_KEY) {
+    throw new Error("POSTHOG_API_KEY is not configured");
+  }
+
+  // Trim any whitespace from API key
+  const apiKey = POSTHOG_API_KEY.trim();
+  const url = `${POSTHOG_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query/`;
+  const body = JSON.stringify({
+    query: {
+      kind: "HogQLQuery",
+      query,
+    },
+  });
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`PostHog API error: ${response.status} - ${errorText}`);
+  }
+
+  const data: PostHogQueryResponse = await response.json();
+  const results = data.results || data.responseData?.results;
+
+  if (!results || results.length === 0) {
+    return [];
+  }
+
+  return results;
+}
+
 async function queryPostHog(query: string): Promise<number> {
   if (!POSTHOG_API_KEY) {
     throw new Error("POSTHOG_API_KEY is not configured");
@@ -403,6 +444,47 @@ export async function GET(request: NextRequest) {
     // Notification is common for both flows, use the same query (already defined above)
     const viewedNotification_premiumQuery = viewedNotification_noPremiumQuery;
 
+    // Build trial data queries
+    const baseFiltersForTrials = `timestamp >= toDateTime('${currentWindow.start.toISOString()}','Europe/Warsaw') AND timestamp < toDateTime('${currentWindow.end.toISOString()}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}'`;
+
+    // Query for paywall views
+    const paywall1ViewsQuery = `SELECT count() AS value FROM events WHERE event = 'onboarding_paywall_action' AND JSONExtractString(properties,'action') = 'viewed' AND JSONExtractString(properties,'variant') = 'price1' AND ${baseFiltersForTrials}`;
+    const paywall2ViewsQuery = `SELECT count() AS value FROM events WHERE event = 'onboarding_paywall_action' AND JSONExtractString(properties,'action') = 'viewed' AND JSONExtractString(properties,'variant') = 'price2' AND ${baseFiltersForTrials}`;
+
+    // Query for trial started by variant and period
+    const trialStartedQuery = `
+      SELECT
+        JSONExtractString(properties,'variant') AS variant,
+        coalesce(JSONExtractString(properties,'selected_period'), '') AS period,
+        count() AS count
+      FROM events
+      WHERE event = 'onboarding_paywall_action'
+        AND JSONExtractString(properties,'action') = 'trial_started'
+        AND ${baseFiltersForTrials}
+        AND JSONExtractString(properties,'variant') IN ('price1', 'price2')
+        AND JSONExtractString(properties,'variant') IS NOT NULL
+        AND JSONExtractString(properties,'variant') != ''
+      GROUP BY variant, period
+      ORDER BY variant, period
+    `;
+
+    // Query for purchase success by variant and period
+    const purchaseSuccessQuery = `
+      SELECT
+        JSONExtractString(properties,'variant') AS variant,
+        coalesce(JSONExtractString(properties,'selected_period'), '') AS period,
+        count() AS count
+      FROM events
+      WHERE event = 'onboarding_paywall_action'
+        AND JSONExtractString(properties,'action') = 'purchase_success'
+        AND ${baseFiltersForTrials}
+        AND JSONExtractString(properties,'variant') IN ('price1', 'price2')
+        AND JSONExtractString(properties,'variant') IS NOT NULL
+        AND JSONExtractString(properties,'variant') != ''
+      GROUP BY variant, period
+      ORDER BY variant, period
+    `;
+
     // Execute all queries in parallel
     const [
       started,
@@ -428,6 +510,10 @@ export async function GET(request: NextRequest) {
       viewedPremium3,
       viewedSummary,
       viewedNoPremium1_premium,
+      paywall1Views,
+      paywall2Views,
+      trialStartedResults,
+      purchaseSuccessResults,
     ] = await Promise.all([
       queryPostHog(startedQuery),
       queryPostHog(startedComparisonQuery),
@@ -452,6 +538,10 @@ export async function GET(request: NextRequest) {
       queryPostHog(viewedPremium3Query),
       queryPostHog(viewedSummaryQuery),
       queryPostHog(viewedNoPremium1_premiumQuery),
+      queryPostHog(paywall1ViewsQuery),
+      queryPostHog(paywall2ViewsQuery),
+      queryPostHogArray(trialStartedQuery),
+      queryPostHogArray(purchaseSuccessQuery),
     ]);
 
     // Calculate percentage changes
@@ -502,6 +592,94 @@ export async function GET(request: NextRequest) {
       },
     };
 
+    // Process trial data
+    // Initialize trial data structure
+    const trialsData: {
+      ps1: {
+        views: number;
+        trialsStarted: { monthly: number; annual: number; total: number };
+        purchases: { monthly: number; annual: number; total: number };
+      };
+      ps2: {
+        views: number;
+        trialsStarted: { monthly: number; annual: number; total: number };
+        purchases: { monthly: number; annual: number; total: number };
+      };
+    } = {
+      ps1: {
+        views: Math.round(paywall1Views),
+        trialsStarted: { monthly: 0, annual: 0, total: 0 },
+        purchases: { monthly: 0, annual: 0, total: 0 },
+      },
+      ps2: {
+        views: Math.round(paywall2Views),
+        trialsStarted: { monthly: 0, annual: 0, total: 0 },
+        purchases: { monthly: 0, annual: 0, total: 0 },
+      },
+    };
+
+    // Process trial started results
+    trialStartedResults.forEach((row) => {
+      const variant = String(row[0] || "");
+      const periodRaw = String(row[1] || "");
+      const countValue =
+        typeof row[2] === "number" ? row[2] : Number(row[2]) || 0;
+
+      const period =
+        periodRaw === ""
+          ? "unknown"
+          : periodRaw.toLowerCase() === "yearly"
+          ? "annual"
+          : periodRaw.toLowerCase();
+
+      if (variant === "price1") {
+        if (period === "monthly") {
+          trialsData.ps1.trialsStarted.monthly += countValue;
+        } else if (period === "annual") {
+          trialsData.ps1.trialsStarted.annual += countValue;
+        }
+        trialsData.ps1.trialsStarted.total += countValue;
+      } else if (variant === "price2") {
+        if (period === "monthly") {
+          trialsData.ps2.trialsStarted.monthly += countValue;
+        } else if (period === "annual") {
+          trialsData.ps2.trialsStarted.annual += countValue;
+        }
+        trialsData.ps2.trialsStarted.total += countValue;
+      }
+    });
+
+    // Process purchase success results
+    purchaseSuccessResults.forEach((row) => {
+      const variant = String(row[0] || "");
+      const periodRaw = String(row[1] || "");
+      const countValue =
+        typeof row[2] === "number" ? row[2] : Number(row[2]) || 0;
+
+      const period =
+        periodRaw === ""
+          ? "unknown"
+          : periodRaw.toLowerCase() === "yearly"
+          ? "annual"
+          : periodRaw.toLowerCase();
+
+      if (variant === "price1") {
+        if (period === "monthly") {
+          trialsData.ps1.purchases.monthly += countValue;
+        } else if (period === "annual") {
+          trialsData.ps1.purchases.annual += countValue;
+        }
+        trialsData.ps1.purchases.total += countValue;
+      } else if (variant === "price2") {
+        if (period === "monthly") {
+          trialsData.ps2.purchases.monthly += countValue;
+        } else if (period === "annual") {
+          trialsData.ps2.purchases.annual += countValue;
+        }
+        trialsData.ps2.purchases.total += countValue;
+      }
+    });
+
     return NextResponse.json({
       started: {
         value: Math.round(started),
@@ -524,6 +702,7 @@ export async function GET(request: NextRequest) {
         change: `${durationDelta >= 0 ? "+" : ""}${durationDelta.toFixed(1)}%`,
       },
       pages: pagesData,
+      trials: trialsData,
     });
   } catch (error) {
     console.error("Onboarding API error:", error);

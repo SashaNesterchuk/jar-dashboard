@@ -14,6 +14,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardBlock } from "./custom/card-block";
 import { ToggleGroup, ToggleGroupItem } from "@radix-ui/react-toggle-group";
 import { ChartAreaStep } from "./ui/chart-area-step";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { IconLoader } from "@tabler/icons-react";
 
 interface OnboardingData {
   started: {
@@ -37,6 +46,18 @@ interface OnboardingData {
   pages?: {
     noPremium: Record<string, number>;
     premium: Record<string, number>;
+  };
+  trials?: {
+    ps1: {
+      views: number;
+      trialsStarted: { monthly: number; annual: number; total: number };
+      purchases: { monthly: number; annual: number; total: number };
+    };
+    ps2: {
+      views: number;
+      trialsStarted: { monthly: number; annual: number; total: number };
+      purchases: { monthly: number; annual: number; total: number };
+    };
   };
 }
 
@@ -264,7 +285,105 @@ export function Onboarding({}: {}) {
         </div>
       </TabsContent>
       <TabsContent value="trial" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
+        <div className="flex flex-1 flex-col gap-4">
+          <div className="overflow-hidden rounded-lg border">
+            {isLoading ? (
+              <div className="flex h-64 items-center justify-center">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <IconLoader className="h-4 w-4 animate-spin" />
+                  Loading trial data...
+                </div>
+              </div>
+            ) : onboardingData?.trials ? (
+              <Table>
+                <TableHeader className="bg-muted sticky top-0 z-10">
+                  <TableRow>
+                    <TableHead className="w-32">Paywall</TableHead>
+                    <TableHead className="w-32 text-right">Views</TableHead>
+                    <TableHead className="w-40 text-right">
+                      Trials Started
+                    </TableHead>
+                    <TableHead className="w-32 text-right">Monthly</TableHead>
+                    <TableHead className="w-32 text-right">Annual</TableHead>
+                    <TableHead className="w-32 text-right">Total</TableHead>
+                    <TableHead className="w-40 text-right">Purchases</TableHead>
+                    <TableHead className="w-32 text-right">Monthly</TableHead>
+                    <TableHead className="w-32 text-right">Annual</TableHead>
+                    <TableHead className="w-32 text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="font-medium">PS1</TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps1.views.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {onboardingData.trials.ps1.trialsStarted.total.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps1.trialsStarted.monthly.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps1.trialsStarted.annual.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {onboardingData.trials.ps1.trialsStarted.total.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {onboardingData.trials.ps1.purchases.total.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps1.purchases.monthly.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps1.purchases.annual.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {onboardingData.trials.ps1.purchases.total.toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">PS2</TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps2.views.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {onboardingData.trials.ps2.trialsStarted.total.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps2.trialsStarted.monthly.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps2.trialsStarted.annual.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {onboardingData.trials.ps2.trialsStarted.total.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {onboardingData.trials.ps2.purchases.total.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps2.purchases.monthly.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {onboardingData.trials.ps2.purchases.annual.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {onboardingData.trials.ps2.purchases.total.toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="flex h-64 items-center justify-center">
+                <div className="text-sm text-muted-foreground">
+                  No trial data available for this range.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </TabsContent>
     </Tabs>
   );

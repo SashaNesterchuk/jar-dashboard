@@ -31,6 +31,7 @@ export default function Page() {
               </div>
               <h2 className="text-2xl font-bold px-4 lg:px-6">Onboarding</h2>
               <Onboarding />
+              <h2 className="text-2xl font-bold px-4 lg:px-6">Practices</h2>
               <PracticeTable />
             </div>
           </div>
