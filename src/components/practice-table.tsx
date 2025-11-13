@@ -258,17 +258,9 @@ export function PracticeTable({}: {}) {
   const fetchPracticesData = React.useCallback(async (range: string) => {
     setIsLoading(true);
     try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL ||
-        (typeof window !== "undefined"
-          ? window.location.origin
-          : "http://localhost:3000");
-      const response = await fetch(
-        `${baseUrl}/api/practices?timeRange=${range}`,
-        {
-          cache: "no-store",
-        }
-      );
+      const response = await fetch(`/api/practices?timeRange=${range}`, {
+        cache: "no-store",
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch practices data");
@@ -311,13 +303,8 @@ export function PracticeTable({}: {}) {
     setIsTrialLoading(true);
     setTrialError(null);
     try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL ||
-        (typeof window !== "undefined"
-          ? window.location.origin
-          : "http://localhost:3000");
       const response = await fetch(
-        `${baseUrl}/api/practices?type=trial-conversions&timeRange=${range}`,
+        `/api/practices?type=trial-conversions&timeRange=${range}`,
         {
           cache: "no-store",
         }
@@ -367,13 +354,8 @@ export function PracticeTable({}: {}) {
 
   const fetchPracticeTypesData = React.useCallback(async (range: string) => {
     try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL ||
-        (typeof window !== "undefined"
-          ? window.location.origin
-          : "http://localhost:3000");
       const response = await fetch(
-        `${baseUrl}/api/practices?type=types&timeRange=${range}`,
+        `/api/practices?type=types&timeRange=${range}`,
         {
           cache: "no-store",
         }

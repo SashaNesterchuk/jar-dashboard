@@ -84,17 +84,9 @@ export function Onboarding({}: {}) {
   const fetchOnboardingData = React.useCallback(async (range: string) => {
     setIsLoading(true);
     try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL ||
-        (typeof window !== "undefined"
-          ? window.location.origin
-          : "http://localhost:3000");
-      const response = await fetch(
-        `${baseUrl}/api/onboarding?timeRange=${range}`,
-        {
-          cache: "no-store",
-        }
-      );
+      const response = await fetch(`/api/onboarding?timeRange=${range}`, {
+        cache: "no-store",
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch onboarding data");

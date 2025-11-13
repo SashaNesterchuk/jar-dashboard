@@ -8,6 +8,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import data from "./data.json";
 import { Onboarding } from "@/components/onboarding";
 import { PracticeTable } from "@/components/practice-table";
+import { Checkin } from "@/components/checkin";
 
 export default function Page() {
   return (
@@ -33,6 +34,8 @@ export default function Page() {
               <Onboarding />
               <h2 className="text-2xl font-bold px-4 lg:px-6">Practices</h2>
               <PracticeTable />
+              <h2 className="text-2xl font-bold px-4 lg:px-6">Checkin</h2>
+              <Checkin />
             </div>
           </div>
         </div>

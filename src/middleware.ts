@@ -23,8 +23,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const session = await verifySessionToken(sessionCookie);
+  let session = null;
+  try {
+    const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    session = await verifySessionToken(sessionCookie);
+  } catch (error) {
+    // If AUTH_SECRET is not set or there's an auth error, log it and treat as no session
+    console.error("Middleware auth error:", error);
+    // In production, you might want to return an error page instead
+    // For now, we'll treat it as unauthenticated
+  }
 
   if (pathname === "/login") {
     if (session) {
