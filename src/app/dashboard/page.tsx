@@ -7,6 +7,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import data from "./data.json";
 import { Onboarding } from "@/components/onboarding";
+import { PracticeTable } from "@/components/practice-table";
 
 export default function Page() {
   return (
@@ -28,8 +29,9 @@ export default function Page() {
               <div className="px-4 lg:px-6">
                 <ChartAreaInteractive />
               </div>
+              <h2 className="text-2xl font-bold px-4 lg:px-6">Onboarding</h2>
               <Onboarding />
-              <DataTable data={data} />
+              <PracticeTable />
             </div>
           </div>
         </div>

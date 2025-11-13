@@ -12,7 +12,7 @@ import {
 
 interface CardBlockProps {
   title: string;
-  value: number;
+  value: number | string;
   change?: string;
   period: string;
 }

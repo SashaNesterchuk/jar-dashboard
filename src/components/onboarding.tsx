@@ -1,87 +1,6 @@
 "use client";
 
 import * as React from "react";
-import {
-  closestCenter,
-  DndContext,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type UniqueIdentifier,
-} from "@dnd-kit/core";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import {
-  arrayMove,
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
-  IconChevronDown,
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronsLeft,
-  IconChevronsRight,
-  IconCircleCheckFilled,
-  IconDotsVertical,
-  IconGripVertical,
-  IconLayoutColumns,
-  IconLoader,
-  IconPlus,
-  IconTrendingUp,
-} from "@tabler/icons-react";
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  flexRender,
-  getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  Row,
-  SortingState,
-  useReactTable,
-  VisibilityState,
-} from "@tanstack/react-table";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
-import { toast } from "sonner";
-import { z } from "zod";
-
-import { useIsMobile } from "@/hooks/use-mobile";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -90,21 +9,137 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardBlock } from "./custom/card-block";
 import { ToggleGroup, ToggleGroupItem } from "@radix-ui/react-toggle-group";
+import { ChartAreaStep } from "./ui/chart-area-step";
+
+interface OnboardingData {
+  started: {
+    value: number;
+    previous: number;
+    delta: number;
+    change: string;
+  };
+  completed: {
+    value: number;
+    previous: number;
+    delta: number;
+    change: string;
+  };
+  avgDuration: {
+    value: number;
+    previous: number;
+    delta: number;
+    change: string;
+  };
+  pages?: {
+    noPremium: Record<string, number>;
+    premium: Record<string, number>;
+  };
+}
+
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds === 0) return "0 s";
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+
+  if (minutes === 0) {
+    return `${remainingSeconds} s`;
+  } else if (remainingSeconds === 0) {
+    return `${minutes} min`;
+  } else {
+    return `${minutes} m ${remainingSeconds} s`;
+  }
+}
 
 export function Onboarding({}: {}) {
   const [timeRange, setTimeRange] = React.useState("7d");
+  const [onboardingData, setOnboardingData] =
+    React.useState<OnboardingData | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  const fetchOnboardingData = React.useCallback(async (range: string) => {
+    setIsLoading(true);
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        (typeof window !== "undefined"
+          ? window.location.origin
+          : "http://localhost:3000");
+      const response = await fetch(
+        `${baseUrl}/api/onboarding?timeRange=${range}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch onboarding data");
+      }
+
+      const data = await response.json();
+      setOnboardingData(data);
+    } catch (error) {
+      console.error("Error fetching onboarding data:", error);
+      // Set default values on error
+      setOnboardingData({
+        started: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
+        completed: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
+        avgDuration: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchOnboardingData(timeRange);
+  }, [timeRange, fetchOnboardingData]);
+
+  const getPeriodText = (range: string): string => {
+    switch (range) {
+      case "7d":
+        return "vs Previous 7 days";
+      case "30d":
+        return "vs Previous 30 days";
+      case "90d":
+        return "vs Previous 3 months";
+      default:
+        return "vs Previous period";
+    }
+  };
+
+  const pages = {
+    noPremium: [
+      "hello",
+      "1",
+      "1.2",
+      "2",
+      "3",
+      "ps1",
+      "noPremium1",
+      "noPremium2",
+      "practice", // breathing, diary, questions
+      "notification",
+      "ps2",
+    ],
+    premium: [
+      "hello",
+      "1",
+      "1.2",
+      "2",
+      "3",
+      "ps1",
+      "premium1",
+      "premium2",
+      "premium3",
+      "summary",
+      "noPremium1",
+      "notification",
+    ],
+  };
 
   return (
     <Tabs defaultValue="basic" className="w-full flex-col justify-start gap-6">
@@ -128,8 +163,8 @@ export function Onboarding({}: {}) {
         </Select>
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
           <TabsTrigger value="basic">Basic</TabsTrigger>
-          <TabsTrigger value="past-performance">Past Performance</TabsTrigger>
-          <TabsTrigger value="key-personnel">Key Personnel</TabsTrigger>
+          <TabsTrigger value="pages">Pages</TabsTrigger>
+          <TabsTrigger value="trial">Trial</TabsTrigger>
         </TabsList>
         <ToggleGroup
           type="single"
@@ -167,34 +202,66 @@ export function Onboarding({}: {}) {
         className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
       >
         <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-          <CardBlock
-            title="Started Onboarding"
-            value={100}
-            change="+10%"
-            period="vs Yesterday"
-          />
-          <CardBlock
-            title="Completed Onboarding"
-            value={100}
-            change="+10%"
-            period="vs Yesterday"
-          />
-          <CardBlock
-            title="Average Duration"
-            value={100}
-            change="+10%"
-            period="vs Yesterday"
-          />
-          <CardBlock
-            title="Total Visitors"
-            value={100}
-            change="+10%"
-            period="vs Yesterday"
-          />
+          {isLoading ? (
+            <>
+              <CardBlock
+                title="Started Onboarding"
+                value={0}
+                change=""
+                period={getPeriodText(timeRange)}
+              />
+              <CardBlock
+                title="Completed Onboarding"
+                value={0}
+                change=""
+                period={getPeriodText(timeRange)}
+              />
+              <CardBlock
+                title="Average Duration"
+                value={0}
+                change=""
+                period={getPeriodText(timeRange)}
+              />
+            </>
+          ) : onboardingData ? (
+            <>
+              <CardBlock
+                title="Started Onboarding"
+                value={onboardingData.started.value}
+                change={onboardingData.started.change}
+                period={getPeriodText(timeRange)}
+              />
+              <CardBlock
+                title="Completed Onboarding"
+                value={onboardingData.completed.value}
+                change={onboardingData.completed.change}
+                period={getPeriodText(timeRange)}
+              />
+              <CardBlock
+                title="Average Duration"
+                value={formatDuration(onboardingData.avgDuration.value)}
+                change={onboardingData.avgDuration.change}
+                period={getPeriodText(timeRange)}
+              />
+            </>
+          ) : null}
         </div>
       </TabsContent>
       <TabsContent value="pages" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
+        <div className="grid w-full grid-cols-1 gap-4 @xl/main:grid-cols-2">
+          <ChartAreaStep
+            title="No premium flow"
+            pages={pages.noPremium}
+            pageData={onboardingData?.pages?.noPremium}
+            timeRange={timeRange}
+          />
+          <ChartAreaStep
+            title="Premium flow"
+            pages={pages.premium}
+            pageData={onboardingData?.pages?.premium}
+            timeRange={timeRange}
+          />
+        </div>
       </TabsContent>
       <TabsContent value="trial" className="flex flex-col px-4 lg:px-6">
         <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
