@@ -1,6 +1,4 @@
-import { EventJourney } from "@/types";
-
-const helpFunction = (ob: any, id: string): EventJourney => {
+const helpFunction = (ob: any, id: string) => {
   return {
     id,
     title: ob.title,
@@ -22,7 +20,7 @@ const helpFunction = (ob: any, id: string): EventJourney => {
   };
 };
 
-export const purposeVision: Array<EventJourney> = [
+export const purposeVision = [
   helpFunction(
     {
       title:

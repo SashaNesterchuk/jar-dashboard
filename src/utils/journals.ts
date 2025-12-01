@@ -1,7 +1,6 @@
-import { EventJourney, EventJourneyCategory, EventQuestion } from "@/types";
 import { journals, questionJournals } from "./journalEvents";
 
-export const onboardingDiary: EventJourney = {
+export const onboardingDiary = {
   id: "onboardingJournal",
   title: "Onboarding Journal",
   ball: "diary",
@@ -21,7 +20,7 @@ export const onboardingDiary: EventJourney = {
   ],
 };
 
-export const onboardingQuestions: EventQuestion = {
+export const onboardingQuestions = {
   id: "onboardingShadowSelf",
   title: "Who's really in charge inside you?",
   ball: "questions",
@@ -113,7 +112,7 @@ export const onboardingQuestions: EventQuestion = {
   ],
 };
 
-export const happyOnboarding: EventJourney = {
+export const happyOnboarding = {
   id: "happyOnboarding",
   title: "What's one small thing you feel grateful for - right now?",
   ball: "authenticity",
@@ -133,7 +132,7 @@ export const happyOnboarding: EventJourney = {
   ],
 };
 
-export const sadOnboarding: EventJourney = {
+export const sadOnboarding = {
   id: "sadOnboarding",
   title: "What do you wish someone would say or do for you right now?",
   ball: "authenticity",
@@ -154,7 +153,7 @@ export const sadOnboarding: EventJourney = {
   ],
 };
 
-export const morningReflection: EventJourney = {
+export const morningReflection = {
   id: "morningReflection",
   title: "Morning Reflection",
   ball: "morning",
@@ -221,7 +220,7 @@ export const morningReflection: EventJourney = {
   ],
 };
 
-export const moonReflection: EventJourney = {
+export const moonReflection = {
   id: "moonReflection",
   title: "Moon Reflection",
   ball: "moon",
@@ -262,7 +261,7 @@ export const moonReflection: EventJourney = {
   ],
 };
 
-export const categories: Array<EventJourneyCategory> = [
+export const categories = [
   {
     id: "-1",
     title: "All",
@@ -368,11 +367,11 @@ export const categories: Array<EventJourneyCategory> = [
   },
 ];
 
-export const journeysNew: Array<EventJourney> = journals;
+export const journeysNew = journals;
 
-export const questionJournalsNew: Array<EventJourney> = questionJournals;
+export const questionJournalsNew = questionJournals;
 
-export const emptyJournal: EventJourney = {
+export const emptyJournal = {
   id: "empty",
   title: "Empty",
   description: "Empty",

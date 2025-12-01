@@ -1,6 +1,4 @@
-import { EventJourney } from "@/types";
-
-export const helpFunction = (ob: any, id: string): EventJourney => {
+export const helpFunction = (ob: any, id: string) => {
   return {
     id,
     title: ob.title,

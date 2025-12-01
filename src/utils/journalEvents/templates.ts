@@ -1,10 +1,4 @@
-import { EventJourney } from "@/types";
-
-const helpFunction = (
-  ob: any,
-  id: string,
-  templates: Array<string>
-): EventJourney => {
+const helpFunction = (ob: any, id: string, templates: Array<string>) => {
   return {
     id,
     title: ob.title,
@@ -79,7 +73,7 @@ const getQuestionsArray = (templateKey: string): Array<string> => {
   return questionsMap[templateKey] || [];
 };
 
-export const templates: Array<EventJourney> = [
+export const templates = [
   helpFunction(
     {
       title: "journeysDefault.quickSnapshot.title",

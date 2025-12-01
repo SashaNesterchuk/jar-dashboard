@@ -1,10 +1,4 @@
-import { EventJourney, Mood } from "@/types";
-
-export const helpFunction = (
-  ob: any,
-  id: string,
-  moodDependents?: Mood
-): EventJourney => {
+export const helpFunction = (ob: any, id: string, moodDependents?: string) => {
   return {
     id,
     title: ob.title,

@@ -1,10 +1,4 @@
-import { EventJourney } from "@/types";
-
-const helpFunction = (
-  ob: any,
-  id: string,
-  premium: boolean = false
-): EventJourney => {
+const helpFunction = (ob: any, id: string, premium: boolean = false) => {
   return {
     id,
     title: ob.title,
@@ -27,7 +21,7 @@ const helpFunction = (
   };
 };
 
-export const authenticity: Array<EventJourney> = [
+export const authenticity = [
   helpFunction(
     {
       title:

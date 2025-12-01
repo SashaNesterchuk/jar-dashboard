@@ -1,7 +1,6 @@
-import { EventBreathe } from "@/types";
 const convertToMs = (time: number) => time * 60 * 1000;
 
-export const onboarding: EventBreathe = {
+export const onboarding = {
   id: "3f2a1b8c-9d5f-4a2d-92ea-4b0b8e6a3c5f",
   tKey: "energy",
   title: "energy.",
@@ -26,7 +25,7 @@ export const onboarding: EventBreathe = {
   ],
 };
 
-export const breathes: EventBreathe[] = [
+export const breathes = [
   // ENERGY — slightly inhale-biased to feel more alert, but still safe
   {
     id: "3f2a1b8c-9d5f-4a2d-92ea-4b0b8e6a3c5f",

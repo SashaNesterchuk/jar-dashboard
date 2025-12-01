@@ -1,6 +1,4 @@
-import { EventQuestion } from "@/types";
-
-export const onboardingQuestion: EventQuestion = {
+export const onboardingQuestion = {
   id: "onboarding",
   title: "",
   ball: "questions",
@@ -253,7 +251,7 @@ export const onboardingQuestion: EventQuestion = {
   ],
 };
 
-export const questionsNe: EventQuestion[] = [
+export const questionsNe = [
   {
     id: "attachmentStyleSnapshotTest",
     title: "",

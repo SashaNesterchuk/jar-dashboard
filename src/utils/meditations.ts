@@ -1,6 +1,4 @@
-import { EventMeditation } from "@/types";
-
-export const meditations: EventMeditation[] = [
+export const meditations = [
   {
     id: "c8705946-e4d7-4d37-85ec-9ab482fc1a35",
     tKey: "stressRelease",

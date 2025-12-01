@@ -1,11 +1,9 @@
-import { EventJourney, Mood } from "@/types";
-
 const helpFunction = (
   ob: any,
   id: string,
   premium: boolean = false,
-  moodDependents?: Mood
-): EventJourney => {
+  moodDependents?: string
+) => {
   return {
     id,
     title: ob.title,
@@ -28,7 +26,7 @@ const helpFunction = (
     ],
   };
 };
-export const selfAwareness: Array<EventJourney> = [
+export const selfAwareness = [
   helpFunction(
     {
       title:
