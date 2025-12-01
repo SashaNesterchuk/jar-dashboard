@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mind Jar – Unit Economics Calculator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        --bg: #050816;
+        --bg-alt: #0b1020;
+        --card: #111827;
+        --card-alt: #020617;
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.15);
+        --accent-strong: rgba(56, 189, 248, 0.3);
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --danger: #f97373;
+        --success: #4ade80;
+        --warning: #facc15;
+        --border: rgba(148, 163, 184, 0.3);
+        --radius-lg: 18px;
+        --radius-sm: 10px;
+        --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.7);
+      }
+
+      * {
+        box-sizing: border-box;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+          "Inter", sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        background: radial-gradient(
+          circle at top,
+          #1e293b 0,
+          #020617 45%,
+          #020617 100%
+        );
+        color: var(--text);
+      }
+
+      .app-shell {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        font-size: 28px;
+        margin: 0;
+        letter-spacing: 0.03em;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      h1 span.badge {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border: 1px solid var(--accent-strong);
+      }
+
+      .subtitle {
+        margin-top: 6px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 11px;
+      }
+
+      .pill {
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--muted);
+      }
+
+      .pill strong {
+        color: var(--accent);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.1fr 1.1fr 1.1fr;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+
+      @media (max-width: 1024px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 768px) {
+        body {
+          padding: 12px;
+        }
+        .top-bar {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        background: radial-gradient(circle at top left, #1f2937 0, #020617 55%);
+        border-radius: var(--radius-lg);
+        padding: 16px 16px 18px;
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          circle at top right,
+          rgba(56, 189, 248, 0.06),
+          transparent 55%
+        );
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .card h2 {
+        font-size: 15px;
+        margin: 0;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #e5e7eb;
+      }
+
+      .card h3 {
+        font-size: 14px;
+        margin: 0 0 4px;
+        color: #e5e7eb;
+      }
+
+      .card-subtitle {
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .badge-soft {
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 11px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: rgba(15, 23, 42, 0.85);
+        color: var(--muted);
+      }
+
+      .inputs-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        position: relative;
+        z-index: 1;
+      }
+
+      @media (max-width: 500px) {
+        .inputs-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .field label {
+        font-size: 11px;
+        color: var(--muted);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .field label span.hint {
+        font-size: 10px;
+        color: #6b7280;
+      }
+
+      .field input {
+        padding: 7px 9px;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--text);
+        font-size: 12px;
+        outline: none;
+      }
+
+      .field input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+      }
+
+      .field input::-webkit-outer-spin-button,
+      .field input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        appearance: none;
+        margin: 0;
+      }
+      .field input[type="number"] {
+        -moz-appearance: textfield;
+        appearance: textfield;
+      }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: 1.25fr 1.25fr;
+        gap: 10px;
+        margin-top: 10px;
+        position: relative;
+        z-index: 1;
+      }
+
+      @media (max-width: 960px) {
+        .kpi-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .kpi {
+        border-radius: var(--radius-sm);
+        padding: 8px 10px;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .kpi-label {
+        font-size: 11px;
+        color: var(--muted);
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .kpi-main {
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .kpi-main span.small {
+        font-size: 11px;
+        font-weight: 400;
+        margin-left: 4px;
+        color: var(--muted);
+      }
+
+      .kpi-note {
+        font-size: 10px;
+        color: var(--muted);
+      }
+
+      .kpi-main.positive {
+        color: var(--success);
+      }
+
+      .kpi-main.negative {
+        color: var(--danger);
+      }
+
+      .kpi-main.neutral {
+        color: var(--warning);
+      }
+
+      .charts-grid {
+        display: grid;
+        grid-template-columns: 1.4fr 1.1fr;
+        gap: 14px;
+        margin-top: 4px;
+      }
+
+      @media (max-width: 1024px) {
+        .charts-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .chart-wrapper {
+        position: relative;
+        height: 260px;
+      }
+
+      canvas {
+        position: relative;
+        z-index: 1;
+      }
+
+      .footer-note {
+        margin-top: 16px;
+        font-size: 11px;
+        color: var(--muted);
+        text-align: right;
+      }
+
+      .footer-note span {
+        color: var(--accent);
+      }
+
+      /* Info icon styles */
+      .info-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border: 1px solid var(--accent-strong);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: help;
+        margin-left: 6px;
+        position: relative;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+      }
+
+      .info-icon:hover {
+        background: var(--accent-strong);
+        transform: scale(1.1);
+      }
+
+      .info-tooltip {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 8px;
+        padding: 8px 12px;
+        background: rgba(15, 23, 42, 0.98);
+        border: 1px solid var(--accent-strong);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        font-size: 11px;
+        line-height: 1.4;
+        white-space: normal;
+        width: 240px;
+        max-width: calc(100vw - 40px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      .info-tooltip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: var(--accent-strong);
+      }
+
+      .info-icon:hover .info-tooltip,
+      .info-icon:focus .info-tooltip {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      @media (max-width: 768px) {
+        .info-tooltip {
+          width: 200px;
+          font-size: 10px;
+        }
+      }
+
+      .card-header {
+        position: relative;
+      }
+
+      .card-header h2,
+      .card-header h3 {
+        display: flex;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="top-bar">
+        <div>
+          <h1>
+            Mind Jar Unit Economics
+            <span class="badge">LTV · CPI · Growth</span>
+          </h1>
+          <p class="subtitle">
+            Вставляй свої цифри — все перераховується автоматично: LTV,
+            break-even CPI, ROMI та сценарії росту.
+          </p>
+        </div>
+        <div class="pill-row">
+          <div class="pill">
+            <strong>Tip:</strong> почни з конверсії, потім крути CPI
+          </div>
+          <div class="pill">Розрахунки ≈ для 6–12 місяців горизонту</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- Pricing & Cost card -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>
+                Pricing & Cost Structure
+                <span class="info-icon" title="Click for info">
+                  i
+                  <span class="info-tooltip">
+                    This section calculates your net profit per payment cycle
+                    (monthly/annual) after deducting all fees: Apple commission,
+                    taxes, RevenueCat fees, and AI costs. These are NOT LTV
+                    values - they represent profit from a single payment. LTV
+                    requires multiplying by average customer lifetime.
+                  </span>
+                </span>
+              </h2>
+              <div class="card-subtitle">
+                Ціни, комісії, податки й AI cost на одну оплату
+              </div>
+            </div>
+            <span class="badge-soft">Step 1</span>
+          </div>
+          <div class="inputs-grid">
+            <div class="field">
+              <label
+                >Monthly price ($)<span class="hint"
+                  >App Store price</span
+                ></label
+              >
+              <input type="number" id="monthlyPrice" step="0.01" value="7.99" />
+            </div>
+            <div class="field">
+              <label
+                >Annual price ($)<span class="hint"
+                  >App Store price</span
+                ></label
+              >
+              <input type="number" id="annualPrice" step="0.01" value="59.99" />
+            </div>
+            <div class="field">
+              <label
+                >Apple fee (%)<span class="hint"
+                  >Usually 15% or 30%</span
+                ></label
+              >
+              <input type="number" id="appleFeePct" step="0.1" value="15" />
+            </div>
+            <div class="field">
+              <label
+                >Tax on payout (%)<span class="hint"
+                  >VAT, etc. on Apple payout</span
+                ></label
+              >
+              <input type="number" id="taxPct" step="0.1" value="8.5" />
+            </div>
+            <div class="field">
+              <label
+                >RevenueCat fee (% of payout)<span class="hint"
+                  >If 1% plan</span
+                ></label
+              >
+              <input type="number" id="rcPct" step="0.1" value="1.0" />
+            </div>
+            <div class="field">
+              <label
+                >AI cost monthly ($)<span class="hint"
+                  >per billed month</span
+                ></label
+              >
+              <input type="number" id="aiMonthly" step="0.01" value="0.02" />
+            </div>
+            <div class="field">
+              <label
+                >AI cost annual ($)<span class="hint"
+                  >per billed year</span
+                ></label
+              >
+              <input type="number" id="aiAnnual" step="0.01" value="0.29" />
+            </div>
+            <div class="field">
+              <label
+                >Monthly fixed burn ($)<span class="hint"
+                  >Tools, infra, etc.</span
+                ></label
+              >
+              <input type="number" id="monthlyBurn" step="0.01" value="59.79" />
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Profit / monthly billing</span>
+              </div>
+              <div class="kpi-main" id="kpiProfitMonthly">$0.00</div>
+              <div class="kpi-note">
+                Net after Apple, tax, RC &amp; AI per
+                <strong>один оплачений місяць</strong>.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Profit / annual billing</span>
+              </div>
+              <div class="kpi-main" id="kpiProfitAnnual">$0.00</div>
+              <div class="kpi-note">
+                Net after Apple, tax, RC &amp; AI per
+                <strong>один оплачений рік</strong>.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Behaviour & Mix -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>
+                Behaviour & Mix
+                <span class="info-icon" title="Click for info">
+                  i
+                  <span class="info-tooltip">
+                    This section calculates Lifetime Value (LTV) based on user
+                    behavior: how long users stay (lifetime), what percentage
+                    convert to paying users, and the mix between monthly vs
+                    annual plans. The key output is LTV per install, which
+                    determines your maximum acceptable CPI.
+                  </span>
+                </span>
+              </h2>
+              <div class="card-subtitle">
+                Як юзери поводяться: строк життя, конверсія, share планів
+              </div>
+            </div>
+            <span class="badge-soft">Step 2</span>
+          </div>
+          <div class="inputs-grid">
+            <div class="field">
+              <label
+                >Monthly share of payers (%)<span class="hint"
+                  >vs annual</span
+                ></label
+              >
+              <input type="number" id="monthlySharePct" step="1" value="60" />
+            </div>
+            <div class="field">
+              <label
+                >Avg lifetime monthly (months)<span class="hint"
+                  >скільки місяців платять</span
+                ></label
+              >
+              <input
+                type="number"
+                id="monthlyLifetimeMonths"
+                step="1"
+                value="6"
+              />
+            </div>
+            <div class="field">
+              <label
+                >Avg lifetime annual (years)<span class="hint"
+                  >скільки років продовжують</span
+                ></label
+              >
+              <input
+                type="number"
+                id="annualLifetimeYears"
+                step="0.5"
+                value="2"
+              />
+            </div>
+            <div class="field">
+              <label
+                >Install → paying user (%)<span class="hint"
+                  >CR to first payment</span
+                ></label
+              >
+              <input type="number" id="crPayPct" step="0.1" value="7" />
+            </div>
+            <div class="field">
+              <label
+                >Test CPI ($)<span class="hint"
+                  >your target CPI to test</span
+                ></label
+              >
+              <input type="number" id="testCPI" step="0.1" value="2.0" />
+            </div>
+            <div class="field">
+              <label
+                >Current # of payers<span class="hint"
+                  >for growth calc</span
+                ></label
+              >
+              <input type="number" id="currentPayers" step="1" value="20" />
+            </div>
+            <div class="field">
+              <label
+                >Target monthly growth (%)<span class="hint"
+                  >net growth of payers</span
+                ></label
+              >
+              <input type="number" id="growthPct" step="1" value="20" />
+            </div>
+            <div class="field">
+              <label
+                >Monthly churn of payers (%)<span class="hint"
+                  >optional, set 0 if unknown</span
+                ></label
+              >
+              <input type="number" id="churnPct" step="0.5" value="0" />
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>LTV / monthly payer</span>
+              </div>
+              <div class="kpi-main" id="kpiLtvMonthly">$0.00</div>
+              <div class="kpi-note">
+                Скільки в середньому приносить один
+                <strong>місячний</strong> платник за весь строк життя.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>LTV / annual payer</span>
+              </div>
+              <div class="kpi-main" id="kpiLtvAnnual">$0.00</div>
+              <div class="kpi-note">
+                Скільки в середньому приносить один
+                <strong>річний</strong> платник за весь строк життя.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Blended LTV / payer</span>
+              </div>
+              <div class="kpi-main" id="kpiLtvPayer">$0.00</div>
+              <div class="kpi-note">
+                Середній LTV всіх платників з урахуванням share monthly/annual.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>LTV / install</span>
+              </div>
+              <div class="kpi-main" id="kpiLtvInstall">$0.00</div>
+              <div class="kpi-note">
+                Скільки <strong>одна інсталяція</strong> приносить у середньому
+                на горизонті lifetime.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CPI & Growth -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>
+                CPI · Break-even · Growth
+                <span class="info-icon" title="Click for info">
+                  i
+                  <span class="info-tooltip">
+                    This section shows advertising economics and growth
+                    planning: Break-even CPI (maximum you can spend), Safe CPI
+                    (recommended target at 50% of LTV), Aggressive CPI (80% for
+                    rapid scaling), ROMI (return on marketing investment), and
+                    the budget needed to achieve your target growth rate.
+                  </span>
+                </span>
+              </h2>
+              <div class="card-subtitle">
+                Який CPI ок, ROMI та який бюджет потрібен на ріст
+              </div>
+            </div>
+            <span class="badge-soft">Step 3</span>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Break-even CPI</span>
+              </div>
+              <div class="kpi-main" id="kpiBreakEven">$0.00</div>
+              <div class="kpi-note">
+                Якщо CPI = ця цифра — ти в нулі по LTV. Все, що нижче,
+                довгостроково в плюс.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Safe CPI (≈50% of LTV/install)</span>
+              </div>
+              <div class="kpi-main" id="kpiSafeCPI">$0.00</div>
+              <div class="kpi-note">
+                Рівень, на якому маркетинг має хороший запас по прибутковості.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Aggressive CPI (≈80% of LTV/install)</span>
+              </div>
+              <div class="kpi-main" id="kpiAggressiveCPI">$0.00</div>
+              <div class="kpi-note">
+                Допустимий рівень, якщо хочеш сильно масштабуватися, але з
+                меншим запасом.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Payers to cover monthly burn (LTV)</span>
+              </div>
+              <div class="kpi-main" id="kpiPayersForBurn">–</div>
+              <div class="kpi-note">
+                Скільки <strong>нових платників</strong> (за їх повний LTV)
+                потрібно, щоб покрити твій місячний burn.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Installs to cover burn (via LTV/install)</span>
+              </div>
+              <div class="kpi-main" id="kpiInstallsForBurn">–</div>
+              <div class="kpi-note">
+                Орієнтовна кількість інсталів, яка створює LTV, що дорівнює
+                місячному burn.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Growth budget (per month)</span>
+              </div>
+              <div class="kpi-main" id="kpiGrowthBudget">$0.00</div>
+              <div class="kpi-note">
+                Бюджет на рекламу, щоб досягти обраного
+                <strong>% росту платників</strong> при обраному CPI.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>ROMI @ Test CPI (per $1)</span>
+              </div>
+              <div class="kpi-main" id="kpiROMI">$0.00</div>
+              <div class="kpi-note">
+                Скільки $ LTV ти отримуєш з кожного $ у рекламі при обраному
+                CPI.
+              </div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">
+                <span>Net profit / 100 installs @ Test CPI</span>
+              </div>
+              <div class="kpi-main" id="kpiProfit100Installs">$0.00</div>
+              <div class="kpi-note">
+                LTV з 100 інсталів мінус витрати на рекламу для цих 100
+                інсталів.
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-grid">
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h3>
+                LTV / Install vs Conversion Rate
+                <span class="info-icon" title="Click for info">
+                  i
+                  <span class="info-tooltip">
+                    This chart shows how LTV per install changes as conversion
+                    rate varies from 1% to 20%, keeping all other parameters
+                    fixed. Use this to see the sensitivity of your economics to
+                    conversion improvements. Higher conversion = higher LTV per
+                    install.
+                  </span>
+                </span>
+              </h3>
+              <div class="card-subtitle">
+                Як сильно LTV по інсталу залежить від CR в платник (інші
+                параметри фіксовані).
+              </div>
+            </div>
+            <span class="badge-soft">Scenario sweep</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="ltvCrChart"></canvas>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h3>
+                Profit / Install vs CPI
+                <span class="info-icon" title="Click for info">
+                  i
+                  <span class="info-tooltip">
+                    This chart shows profit per install at different CPI levels,
+                    based on your current LTV per install. Where the line
+                    crosses zero = your break-even CPI. Negative values mean
+                    you're losing money, positive values mean profit. Use this
+                    to visually find your acceptable CPI range.
+                  </span>
+                </span>
+              </h3>
+              <div class="card-subtitle">
+                При фіксованому LTV/install: де ти в плюс, а де вже починається
+                мінус.
+              </div>
+            </div>
+            <span class="badge-soft">Unit per install</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="profitCpiChart"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <div class="footer-note">
+        Built for <span>Mind&nbsp;Jar</span> – редагуй цифри, поки не відчуєш
+        комфортний баланс між ростом і ризиком.
+      </div>
+    </div>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+      // ============================================================================
+      // UTILITY FUNCTIONS
+      // ============================================================================
+
+      /**
+       * Gets a number value from an input element, with fallback
+       * @param {string} id - Element ID
+       * @param {number} fallback - Default value if element not found or invalid
+       * @returns {number} Parsed number or fallback
+       */
+      function getNumber(id, fallback) {
+        const el = document.getElementById(id);
+        if (!el) return fallback;
+        const v = parseFloat(el.value);
+        return Number.isFinite(v) ? v : fallback;
+      }
+
+      /**
+       * Formats a number as currency (e.g., "$12.34" or "–" for invalid)
+       * @param {number} x - Number to format
+       * @returns {string} Formatted currency string
+       */
+      function formatCurrency(x) {
+        if (!Number.isFinite(x)) return "–";
+        const sign = x < 0 ? "-" : "";
+        return sign + "$" + Math.abs(x).toFixed(2);
+      }
+
+      /**
+       * Formats a number as integer (e.g., "42" or "–" for invalid)
+       * @param {number} x - Number to format
+       * @returns {string} Formatted integer string
+       */
+      function formatInt(x) {
+        if (!Number.isFinite(x)) return "–";
+        return Math.round(x).toString();
+      }
+
+      // ============================================================================
+      // CORE CALCULATION FUNCTIONS
+      // ============================================================================
+
+      /**
+       * Computes all unit economics metrics based on input parameters
+       *
+       * Calculation flow:
+       * 1. Calculate profit per payment cycle (monthly/annual) after fees
+       * 2. Calculate LTV per payer type (monthly/annual) based on lifetime
+       * 3. Calculate blended LTV across all payers
+       * 4. Calculate LTV per install (blended LTV × conversion rate)
+       * 5. Calculate CPI guidelines (break-even, safe, aggressive)
+       * 6. Calculate burn coverage metrics
+       *
+       * @param {Object} params - Input parameters
+       * @returns {Object} Economics metrics object
+       */
+      function computeEconomics(params) {
+        const {
+          monthlyPrice,
+          annualPrice,
+          appleFeePct,
+          taxPct,
+          rcPct,
+          aiMonthly,
+          aiAnnual,
+          monthlySharePct,
+          monthlyLifetimeMonths,
+          annualLifetimeYears,
+          crPayPct,
+          monthlyBurn,
+        } = params;
+
+        // ========================================================================
+        // STEP 1: Calculate profit per payment cycle (after all fees)
+        // ========================================================================
+
+        // Monthly subscription profit
+        const appleFeeMonthly = (monthlyPrice * appleFeePct) / 100;
+        const payoutMonthly = monthlyPrice - appleFeeMonthly;
+        const taxMonthly = (payoutMonthly * taxPct) / 100;
+        const rcMonthly = (payoutMonthly * rcPct) / 100;
+        const profitMonthlyPerCycle =
+          payoutMonthly - taxMonthly - rcMonthly - aiMonthly;
+
+        // Annual subscription profit
+        const appleFeeAnnual = (annualPrice * appleFeePct) / 100;
+        const payoutAnnual = annualPrice - appleFeeAnnual;
+        const taxAnnual = (payoutAnnual * taxPct) / 100;
+        const rcAnnual = (payoutAnnual * rcPct) / 100;
+        const profitAnnualPerCycle =
+          payoutAnnual - taxAnnual - rcAnnual - aiAnnual;
+
+        // ========================================================================
+        // STEP 2: Calculate LTV per payer type
+        // ========================================================================
+
+        const monthlyLifetime = Math.max(0, monthlyLifetimeMonths);
+        const annualLifetime = Math.max(0, annualLifetimeYears);
+
+        const ltvMonthlyPayer = profitMonthlyPerCycle * monthlyLifetime;
+        const ltvAnnualPayer = profitAnnualPerCycle * annualLifetime;
+
+        // ========================================================================
+        // STEP 3: Calculate blended LTV (weighted average across plan types)
+        // ========================================================================
+
+        const mShare = Math.min(100, Math.max(0, monthlySharePct)) / 100;
+        const aShare = 1 - mShare; // Annual share = 1 - monthly share
+
+        const blendedLtvPayer =
+          mShare * ltvMonthlyPayer + aShare * ltvAnnualPayer;
+
+        // ========================================================================
+        // STEP 4: Calculate LTV per install
+        // ========================================================================
+
+        const crPay = Math.max(0, crPayPct) / 100; // Conversion rate as decimal
+        const ltvPerInstall = blendedLtvPayer * crPay;
+
+        // ========================================================================
+        // STEP 5: Calculate CPI guidelines
+        // ========================================================================
+
+        const breakEvenCPI = ltvPerInstall; // Maximum acceptable CPI
+        const safeCPI = ltvPerInstall * 0.5; // Conservative target (50% of LTV)
+        const aggressiveCPI = ltvPerInstall * 0.8; // Aggressive target (80% of LTV)
+
+        // ========================================================================
+        // STEP 6: Calculate burn coverage metrics
+        // ========================================================================
+
+        const payersForBurn =
+          blendedLtvPayer > 0 ? monthlyBurn / blendedLtvPayer : NaN;
+        const installsForBurn =
+          ltvPerInstall > 0 ? monthlyBurn / ltvPerInstall : NaN;
+
+        return {
+          profitMonthlyPerCycle,
+          profitAnnualPerCycle,
+          ltvMonthlyPayer,
+          ltvAnnualPayer,
+          blendedLtvPayer,
+          ltvPerInstall,
+          breakEvenCPI,
+          safeCPI,
+          aggressiveCPI,
+          payersForBurn,
+          installsForBurn,
+        };
+      }
+
+      /**
+       * Computes growth-related metrics (budget, ROMI, profit scenarios)
+       *
+       * @param {Object} params - Input parameters including growth targets
+       * @param {Object} econ - Economics metrics from computeEconomics()
+       * @returns {Object} Growth metrics object
+       */
+      function computeGrowth(params, econ) {
+        const { currentPayers, growthPct, churnPct, testCPI, crPayPct } =
+          params;
+
+        const crPay = Math.max(0, crPayPct) / 100; // Conversion rate
+        const cpi = Math.max(0, testCPI); // Cost per install
+
+        let growthBudget = NaN;
+        let romi = NaN;
+        let profit100 = NaN;
+
+        // ========================================================================
+        // Calculate growth budget needed to achieve target growth
+        // ========================================================================
+
+        const churnRate = Math.max(0, churnPct) / 100;
+        const curPayers = Math.max(0, currentPayers);
+        const growthRate = Math.max(0, growthPct) / 100;
+
+        if (curPayers > 0 && crPay > 0 && cpi > 0) {
+          // Calculate how many new payers are needed
+          const lostPayers = curPayers * churnRate; // Payers lost to churn
+          const targetPayers = curPayers * (1 + growthRate); // Target after growth
+          const neededNetIncrease = targetPayers - (curPayers - lostPayers);
+
+          const neededNewPayers = Math.max(0, neededNetIncrease);
+          const installsNeeded = neededNewPayers / crPay; // Installs to get new payers
+          growthBudget = installsNeeded * cpi; // Budget = installs × CPI
+        }
+
+        // ========================================================================
+        // Calculate ROMI (Return on Marketing Investment)
+        // ========================================================================
+
+        if (econ.ltvPerInstall > 0 && cpi > 0) {
+          romi = econ.ltvPerInstall / cpi; // How much LTV per $1 spent
+
+          // Calculate profit from 100 installs at test CPI
+          const installsSample = 100;
+          const ltvFromSample = econ.ltvPerInstall * installsSample;
+          const adCostSample = cpi * installsSample;
+          profit100 = ltvFromSample - adCostSample; // Net profit
+        }
+
+        return {
+          growthBudget,
+          romi,
+          profit100,
+        };
+      }
+
+      // ============================================================================
+      // CHART INSTANCES (stored globally for updates)
+      // ============================================================================
+
+      let ltvCrChart = null;
+      let profitCpiChart = null;
+
+      // ============================================================================
+      // MAIN UPDATE FUNCTION
+      // ============================================================================
+
+      /**
+       * Main function that reads all inputs, calculates metrics, and updates UI
+       * Called whenever any input changes
+       */
+      function updateOutputs() {
+        // ========================================================================
+        // Read all input values (with defaults)
+        // ========================================================================
+
+        const params = {
+          // Pricing & fees
+          monthlyPrice: getNumber("monthlyPrice", 7.99),
+          annualPrice: getNumber("annualPrice", 59.99),
+          appleFeePct: getNumber("appleFeePct", 15),
+          taxPct: getNumber("taxPct", 8.5),
+          rcPct: getNumber("rcPct", 1.0),
+          aiMonthly: getNumber("aiMonthly", 0.02),
+          aiAnnual: getNumber("aiAnnual", 0.29),
+          monthlyBurn: getNumber("monthlyBurn", 59.79),
+
+          // User behavior
+          monthlySharePct: getNumber("monthlySharePct", 60),
+          monthlyLifetimeMonths: getNumber("monthlyLifetimeMonths", 6),
+          annualLifetimeYears: getNumber("annualLifetimeYears", 2),
+          crPayPct: getNumber("crPayPct", 7),
+
+          // Growth parameters
+          currentPayers: getNumber("currentPayers", 20),
+          growthPct: getNumber("growthPct", 20),
+          churnPct: getNumber("churnPct", 0),
+          testCPI: getNumber("testCPI", 2.0),
+        };
+
+        // ========================================================================
+        // Calculate all metrics
+        // ========================================================================
+
+        const econ = computeEconomics(params);
+        const growth = computeGrowth(params, econ);
+
+        // ========================================================================
+        // Update UI: Step 1 - Profit per billing cycle
+        // ========================================================================
+
+        document.getElementById("kpiProfitMonthly").textContent =
+          formatCurrency(econ.profitMonthlyPerCycle);
+        document.getElementById("kpiProfitAnnual").textContent = formatCurrency(
+          econ.profitAnnualPerCycle
+        );
+
+        // ========================================================================
+        // Update UI: Step 2 - LTV metrics
+        // ========================================================================
+
+        document.getElementById("kpiLtvMonthly").textContent = formatCurrency(
+          econ.ltvMonthlyPayer
+        );
+        document.getElementById("kpiLtvAnnual").textContent = formatCurrency(
+          econ.ltvAnnualPayer
+        );
+        document.getElementById("kpiLtvPayer").textContent = formatCurrency(
+          econ.blendedLtvPayer
+        );
+        document.getElementById("kpiLtvInstall").textContent = formatCurrency(
+          econ.ltvPerInstall
+        );
+
+        // ========================================================================
+        // Update UI: Step 3 - CPI guidelines
+        // ========================================================================
+
+        document.getElementById("kpiBreakEven").textContent = formatCurrency(
+          econ.breakEvenCPI
+        );
+        document.getElementById("kpiSafeCPI").textContent = formatCurrency(
+          econ.safeCPI
+        );
+        document.getElementById("kpiAggressiveCPI").textContent =
+          formatCurrency(econ.aggressiveCPI);
+
+        // ========================================================================
+        // Update UI: Burn coverage
+        // ========================================================================
+
+        document.getElementById("kpiPayersForBurn").textContent =
+          econ.payersForBurn ? formatInt(econ.payersForBurn) : "–";
+        document.getElementById("kpiInstallsForBurn").textContent =
+          econ.installsForBurn ? formatInt(econ.installsForBurn) : "–";
+
+        // ========================================================================
+        // Update UI: Growth metrics
+        // ========================================================================
+
+        document.getElementById("kpiGrowthBudget").textContent = formatCurrency(
+          growth.growthBudget
+        );
+        document.getElementById("kpiROMI").textContent = Number.isFinite(
+          growth.romi
+        )
+          ? growth.romi.toFixed(2) + "×"
+          : "–";
+        document.getElementById("kpiProfit100Installs").textContent =
+          formatCurrency(growth.profit100);
+
+        // ========================================================================
+        // Update charts
+        // ========================================================================
+
+        updateCharts(params, econ);
+      }
+
+      // ============================================================================
+      // CHART UPDATE FUNCTIONS
+      // ============================================================================
+
+      /**
+       * Updates both charts with current data
+       * @param {Object} params - Current input parameters
+       * @param {Object} econ - Current economics metrics
+       */
+      function updateCharts(params, econ) {
+        // ========================================================================
+        // Chart 1: LTV/Install vs Conversion Rate
+        // Sweeps conversion rate from 1% to 20% to show sensitivity
+        // ========================================================================
+
+        const crLabels = [];
+        const ltvValues = [];
+        for (let cr = 1; cr <= 20; cr += 1) {
+          crLabels.push(cr + "%");
+          // Calculate LTV/install for each conversion rate
+          const modifiedParams = Object.assign({}, params, { crPayPct: cr });
+          const e = computeEconomics(modifiedParams);
+          ltvValues.push(e.ltvPerInstall);
+        }
+
+        // ========================================================================
+        // Chart 2: Profit/Install vs CPI
+        // Shows profit at different CPI levels (from 0 to max)
+        // ========================================================================
+
+        const cpiLabels = [];
+        const profitValues = [];
+        const base = econ.ltvPerInstall; // Base LTV per install
+        // Calculate max CPI to show (at least 2.2× base, or 2× test CPI, or $5)
+        const maxCpi =
+          base > 0 ? Math.max(base * 2.2, 2 * params.testCPI, 5) : 10;
+        const step = maxCpi / 15; // 15 data points
+        for (let c = 0; c <= maxCpi + 1e-6; c += step) {
+          const cpi = c;
+          cpiLabels.push("$" + cpi.toFixed(2));
+          const profitPerInstall = base - cpi; // Profit = LTV - CPI
+          profitValues.push(profitPerInstall);
+        }
+
+        // ========================================================================
+        // Initialize or update Chart 1: LTV/Install vs Conversion Rate
+        // ========================================================================
+
+        if (!ltvCrChart) {
+          // First time: create chart
+          const ctx1 = document.getElementById("ltvCrChart").getContext("2d");
+          ltvCrChart = new Chart(ctx1, {
+            type: "line",
+            data: {
+              labels: crLabels,
+              datasets: [
+                {
+                  label: "LTV / install",
+                  data: ltvValues,
+                  fill: true,
+                  tension: 0.35,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: {
+                  ticks: {
+                    color: "#9ca3af",
+                    autoSkip: true,
+                    maxTicksLimit: 8,
+                  },
+                  grid: {
+                    color: "rgba(55,65,81,0.4)",
+                  },
+                },
+                y: {
+                  ticks: {
+                    color: "#9ca3af",
+                    callback: (v) => "$" + v.toFixed(2),
+                  },
+                  grid: {
+                    color: "rgba(55,65,81,0.4)",
+                  },
+                },
+              },
+              plugins: {
+                legend: {
+                  labels: {
+                    color: "#e5e7eb",
+                    font: { size: 11 },
+                  },
+                },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx) => "LTV/install: $" + ctx.raw.toFixed(2),
+                  },
+                },
+              },
+            },
+          });
+        } else {
+          // Update existing chart
+          ltvCrChart.data.labels = crLabels;
+          ltvCrChart.data.datasets[0].data = ltvValues;
+          ltvCrChart.update();
+        }
+
+        // ========================================================================
+        // Initialize or update Chart 2: Profit/Install vs CPI
+        // ========================================================================
+
+        if (!profitCpiChart) {
+          // First time: create chart
+          const ctx2 = document
+            .getElementById("profitCpiChart")
+            .getContext("2d");
+          profitCpiChart = new Chart(ctx2, {
+            type: "line",
+            data: {
+              labels: cpiLabels,
+              datasets: [
+                {
+                  label: "Profit / install",
+                  data: profitValues,
+                  fill: true,
+                  tension: 0.35,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: {
+                  ticks: {
+                    color: "#9ca3af",
+                    autoSkip: true,
+                    maxTicksLimit: 7,
+                  },
+                  grid: {
+                    color: "rgba(55,65,81,0.4)",
+                  },
+                },
+                y: {
+                  ticks: {
+                    color: "#9ca3af",
+                    callback: (v) => "$" + v.toFixed(2),
+                  },
+                  grid: {
+                    color: "rgba(55,65,81,0.4)",
+                  },
+                },
+              },
+              plugins: {
+                legend: {
+                  labels: {
+                    color: "#e5e7eb",
+                    font: { size: 11 },
+                  },
+                },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx) => "Profit/install: $" + ctx.raw.toFixed(2),
+                  },
+                },
+              },
+            },
+          });
+        } else {
+          profitCpiChart.data.labels = cpiLabels;
+          profitCpiChart.data.datasets[0].data = profitValues;
+          profitCpiChart.update();
+        }
+      }
+
+      function attachListeners() {
+        const ids = [
+          "monthlyPrice",
+          "annualPrice",
+          "appleFeePct",
+          "taxPct",
+          "rcPct",
+          "aiMonthly",
+          "aiAnnual",
+          "monthlyBurn",
+          "monthlySharePct",
+          "monthlyLifetimeMonths",
+          "annualLifetimeYears",
+          "crPayPct",
+          "currentPayers",
+          "growthPct",
+          "churnPct",
+          "testCPI",
+        ];
+        ids.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.addEventListener("input", () => {
+              updateOutputs();
+            });
+          }
+        });
+      }
+
+      window.addEventListener("load", () => {
+        attachListeners();
+        updateOutputs();
+      });
+    </script>
+  </body>
+</html>

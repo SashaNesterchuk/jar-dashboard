@@ -9,12 +9,10 @@ import {
   TouchSensor,
   useSensor,
   useSensors,
-  type DragEndEvent,
   type UniqueIdentifier,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
-  arrayMove,
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
@@ -26,13 +24,7 @@ import {
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
-  IconCircleCheckFilled,
-  IconDotsVertical,
-  IconGripVertical,
-  IconLayoutColumns,
   IconLoader,
-  IconPlus,
-  IconTrendingUp,
 } from "@tabler/icons-react";
 import {
   ColumnDef,
@@ -49,40 +41,17 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
-import { toast } from "sonner";
 import { z } from "zod";
 
-import { useIsMobile } from "@/hooks/use-mobile";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -90,7 +59,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -101,8 +69,21 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@radix-ui/react-toggle-group";
-import { ChartAreaStep } from "./ui/chart-area-step";
 import { ChartPopularPractice } from "./ui/chart-popular-practice";
+import {
+  meditations,
+  breathes,
+  questionsNe,
+  journeysNew,
+  questionJournalsNew,
+  emptyJournal,
+  morningReflection,
+  moonReflection,
+  onboardingDiary,
+  onboardingQuestions,
+  happyOnboarding,
+  sadOnboarding,
+} from "@/utils";
 
 export const schema = z.object({
   id: z.string(), // event_id as string
@@ -119,6 +100,10 @@ export const trialSchema = z.object({
   period: z.string(),
   count: z.number(),
 });
+
+function stripHtmlTags(text: string): string {
+  return text.replace(/<[^>]*>/g, "");
+}
 
 function formatPracticeType(value?: string | null) {
   if (!value) {
@@ -173,25 +158,103 @@ function formatPeriodLabel(value?: string) {
     .join(" ");
 }
 
+function findPracticeById(id: string): { type: string } | null {
+  // Combine all practice arrays to search through
+  const allPractices = [
+    ...meditations,
+    ...breathes,
+    ...questionsNe,
+    ...journeysNew,
+    ...questionJournalsNew,
+    emptyJournal,
+    morningReflection,
+    moonReflection,
+    onboardingDiary,
+    onboardingQuestions,
+    happyOnboarding,
+    sadOnboarding,
+  ];
+
+  // Find practice by ID
+  const practice = allPractices.find((p) => p.id === id);
+
+  return practice ? { type: practice.type } : null;
+}
+
+const CopyableTooltip = ({ text }: { text: string }) => {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <TooltipProvider>
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <div className="cursor-help overflow-hidden text-ellipsis whitespace-nowrap">
+            {text}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          className="max-w-md cursor-pointer select-text"
+          onClick={handleCopy}
+        >
+          <div className="wrap-break-word">
+            {text}
+            {copied && (
+              <span className="ml-2 text-xs text-green-500">✓ Copied!</span>
+            )}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
 const columns: ColumnDef<z.infer<typeof schema>>[] = [
   {
     accessorKey: "id",
     header: "Event ID",
-    cell: ({ row }) => <div className="w-32">{row.original.id}</div>,
-  },
-  {
-    accessorKey: "title",
-    header: "Title",
     cell: ({ row }) => (
-      <div className="w-64 overflow-hidden text-ellipsis whitespace-nowrap">
-        {row.original.title}
+      <div className="w-32">
+        <CopyableTooltip text={row.original.id} />
       </div>
     ),
   },
   {
+    accessorKey: "title",
+    header: "Title",
+    cell: ({ row }) => {
+      const cleanTitle = stripHtmlTags(row.original.title);
+      return (
+        <div className="w-64">
+          <CopyableTooltip text={cleanTitle} />
+        </div>
+      );
+    },
+  },
+  {
     accessorKey: "type",
     header: "Type",
-    cell: ({ row }) => <div className="w-32">{row.original.type}</div>,
+    cell: ({ row }) => {
+      let displayType = row.original.type;
+
+      // If type is "Practice", try to look up the actual type by ID
+      if (displayType === "Practice") {
+        const practice = findPracticeById(row.original.id);
+        if (practice) {
+          displayType = formatPracticeType(practice.type);
+        } else {
+          displayType = "Not Found";
+        }
+      }
+
+      return <div className="w-32">{displayType}</div>;
+    },
   },
   {
     accessorKey: "started",
@@ -377,6 +440,26 @@ export function PracticeTable({}: {}) {
         checkin: apiData.mood || 0,
       };
 
+      // Handle any other types from API (like "practice" or unknown types)
+      Object.keys(apiData).forEach((key) => {
+        const lowerKey = key.toLowerCase();
+        // Skip already mapped keys
+        if (
+          lowerKey === "breathing" ||
+          lowerKey === "meditation" ||
+          lowerKey === "journaling" ||
+          lowerKey === "question" ||
+          lowerKey === "mood"
+        ) {
+          return;
+        }
+        // Add other types with formatted names
+        const formattedKey = formatPracticeType(lowerKey);
+        if (!mappedData[formattedKey]) {
+          mappedData[formattedKey] = apiData[key] || 0;
+        }
+      });
+
       setPracticeTypesData(mappedData);
     } catch (error) {
       console.error("Error fetching practice types data:", error);
@@ -464,7 +547,7 @@ export function PracticeTable({}: {}) {
             type="single"
             value={timeRange}
             onValueChange={setTimeRange}
-            className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
+            className="hidden *:data-[slot=toggle-group-item]:px-4! @[767px]/card:flex"
           >
             <ToggleGroupItem value="90d">Last 3 months</ToggleGroupItem>
             <ToggleGroupItem value="30d">Last 30 days</ToggleGroupItem>
@@ -643,13 +726,23 @@ export function PracticeTable({}: {}) {
         <div className="aspect-video w-full flex-1 rounded-lg border border-dashed">
           <ChartPopularPractice
             title="Popular by type"
-            pages={[
-              "breathing",
-              "meditation",
-              "journaling",
-              "self-discovery",
-              "checkin",
-            ]}
+            pages={React.useMemo(() => {
+              // Start with standard types in preferred order
+              const standardTypes = [
+                "breathing",
+                "meditation",
+                "journaling",
+                "self-discovery",
+                "checkin",
+              ];
+
+              // Add any additional types from the data
+              const additionalTypes = Object.keys(practiceTypesData).filter(
+                (type) => !standardTypes.includes(type)
+              );
+
+              return [...standardTypes, ...additionalTypes];
+            }, [practiceTypesData])}
             pageData={practiceTypesData}
             timeRange={timeRange}
           />
@@ -679,19 +772,36 @@ export function PracticeTable({}: {}) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {trialRows.map((row) => (
-                    <TableRow key={`${row.eventId}-${row.period}`}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {row.eventId}
-                      </TableCell>
-                      <TableCell className="truncate">{row.title}</TableCell>
-                      <TableCell>{row.type}</TableCell>
-                      <TableCell>{row.period}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {row.count.toLocaleString()}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {trialRows.map((row) => {
+                    const cleanTitle = stripHtmlTags(row.title);
+
+                    // Check if type needs to be looked up by ID
+                    let displayType = row.type;
+                    if (displayType === "Practice") {
+                      const practice = findPracticeById(row.eventId);
+                      if (practice) {
+                        displayType = formatPracticeType(practice.type);
+                      } else {
+                        displayType = "Not Found";
+                      }
+                    }
+
+                    return (
+                      <TableRow key={`${row.eventId}-${row.period}`}>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          <CopyableTooltip text={row.eventId} />
+                        </TableCell>
+                        <TableCell>
+                          <CopyableTooltip text={cleanTitle} />
+                        </TableCell>
+                        <TableCell>{displayType}</TableCell>
+                        <TableCell>{row.period}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {row.count.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             ) : (
