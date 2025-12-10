@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -195,7 +195,7 @@ export function ChartAreaInteractive() {
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              minTickGap={32}
+              interval={0}
               tickFormatter={(value) => {
                 const date = new Date(value);
                 return date.toLocaleDateString("en-US", {
@@ -203,6 +203,12 @@ export function ChartAreaInteractive() {
                   day: "numeric",
                 });
               }}
+            />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              tickFormatter={(value) => value.toLocaleString()}
             />
             <ChartTooltip
               cursor={false}
@@ -219,18 +225,16 @@ export function ChartAreaInteractive() {
               }
             />
             <Area
-              dataKey="newUsers"
-              type="natural"
-              fill="url(#fillNewUsers)"
-              stroke="var(--color-newUsers)"
-              stackId="a"
-            />
-            <Area
               dataKey="allUsers"
               type="natural"
               fill="url(#fillAllUsers)"
               stroke="var(--color-allUsers)"
-              stackId="a"
+            />
+            <Area
+              dataKey="newUsers"
+              type="natural"
+              fill="url(#fillNewUsers)"
+              stroke="var(--color-newUsers)"
             />
           </AreaChart>
         </ChartContainer>
