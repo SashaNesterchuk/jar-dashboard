@@ -10,6 +10,8 @@ import { Onboarding } from "@/components/onboarding";
 import { PracticeTable } from "@/components/practice-table";
 import { UsersTable } from "@/components/users-table";
 import { Checkin } from "@/components/checkin";
+import { Retention } from "@/components/retention";
+import { Engagement } from "@/components/engagement";
 
 export default function Page() {
   return (
@@ -33,6 +35,14 @@ export default function Page() {
               </div>
               <h2 className="text-2xl font-bold px-4 lg:px-6">Onboarding</h2>
               <Onboarding />
+              {/* <h2 className="text-2xl font-bold px-4 lg:px-6">
+                Habits & Engagement
+              </h2>
+              <Engagement />
+              <h2 className="text-2xl font-bold px-4 lg:px-6">
+                Retention & Cohorts
+              </h2>
+              <Retention /> */}
               <h2 className="text-2xl font-bold px-4 lg:px-6">Practices</h2>
               <PracticeTable />
               <h2 className="text-2xl font-bold px-4 lg:px-6">Users</h2>

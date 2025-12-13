@@ -181,12 +181,14 @@ export function Checkin({}: {}) {
             <SelectItem value="basic">Basic</SelectItem>
             <SelectItem value="pages">Pages</SelectItem>
             <SelectItem value="trial">Trial</SelectItem>
+            <SelectItem value="habits">Habits</SelectItem>
           </SelectContent>
         </Select>
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
           <TabsTrigger value="basic">Basic</TabsTrigger>
           <TabsTrigger value="pages">Pages</TabsTrigger>
           <TabsTrigger value="trial">Trial</TabsTrigger>
+          <TabsTrigger value="habits">Habits</TabsTrigger>
         </TabsList>
         <ToggleGroup
           type="single"
@@ -353,6 +355,125 @@ export function Checkin({}: {}) {
           </div>
         </div>
       </TabsContent>
+      <TabsContent value="habits" className="flex flex-col px-4 lg:px-6">
+        <CheckinHabitsTab timeRange={timeRange} />
+      </TabsContent>
     </Tabs>
+  );
+}
+
+function CheckinHabitsTab({ timeRange }: { timeRange: string }) {
+  const [data, setData] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchHabits = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(
+          `/api/checkin/habits?timeRange=${timeRange}`,
+          { cache: "no-store" }
+        );
+        if (response.ok) {
+          const result = await response.json();
+          setData(result);
+        }
+      } catch (error) {
+        console.error("Error fetching checkin habits:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHabits();
+  }, [timeRange]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading checkin habits...</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">
+          No checkin habits data available
+        </p>
+      </div>
+    );
+  }
+
+  const frequencyLabels: Record<string, string> = {
+    daily: "Daily (≥6 per week)",
+    several_per_week: "Several per week (3-5)",
+    weekly: "Weekly (1-2)",
+    less: "Less than weekly",
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Frequency Distribution */}
+      {data.frequencyDistribution && data.frequencyDistribution.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-4">
+            Check-in Frequency Distribution
+          </h3>
+          <div className="overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Frequency</TableHead>
+                  <TableHead className="text-right">Users</TableHead>
+                  <TableHead className="text-right">Percentage</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.frequencyDistribution.map((item: any) => (
+                  <TableRow key={item.frequency}>
+                    <TableCell className="font-medium">
+                      {frequencyLabels[item.frequency] || item.frequency}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.count.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.percentage.toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Cards */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Frequency Summary</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {data.frequencyDistribution &&
+            data.frequencyDistribution.map((item: any) => (
+              <div key={item.frequency} className="border rounded-lg p-4">
+                <div className="text-2xl font-bold">{item.count}</div>
+                <div className="text-sm text-muted-foreground">
+                  {frequencyLabels[item.frequency] || item.frequency}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {item.percentage.toFixed(1)}% of users
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+
+      {/* Note about retention correlation */}
+      <div className="rounded-lg border border-blue-500/40 bg-blue-500/5 px-4 py-3 text-sm text-blue-700 dark:text-blue-400">
+        <strong>Note:</strong> Frequency data shows how often users complete
+        check-ins. Higher frequency correlates with better retention rates.
+      </div>
+    </div>
   );
 }

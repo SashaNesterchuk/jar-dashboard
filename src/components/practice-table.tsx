@@ -535,12 +535,14 @@ export function PracticeTable({}: {}) {
             <SelectItem value="practices">Practices</SelectItem>
             <SelectItem value="practice-types">Practice types</SelectItem>
             <SelectItem value="trial-table">Trial Table</SelectItem>
+            <SelectItem value="habits">Habits</SelectItem>
           </SelectContent>
         </Select>
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
           <TabsTrigger value="practices">Practices</TabsTrigger>
           <TabsTrigger value="practice-types">Practice types</TabsTrigger>
           <TabsTrigger value="trial-table">Trial Table</TabsTrigger>
+          <TabsTrigger value="habits">Habits</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-2">
           <ToggleGroup
@@ -819,6 +821,158 @@ export function PracticeTable({}: {}) {
           ) : null}
         </div>
       </TabsContent>
+      <TabsContent value="habits" className="flex flex-col px-4 lg:px-6">
+        <PracticeHabitsTab timeRange={timeRange} />
+      </TabsContent>
     </Tabs>
+  );
+}
+
+function PracticeHabitsTab({ timeRange }: { timeRange: string }) {
+  const [data, setData] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchHabits = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(
+          `/api/practices/habits?timeRange=${timeRange}`,
+          { cache: "no-store" }
+        );
+        if (response.ok) {
+          const result = await response.json();
+          setData(result);
+        }
+      } catch (error) {
+        console.error("Error fetching practice habits:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHabits();
+  }, [timeRange]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading habits data...</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">No habits data available</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Streak Statistics */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Practice Streaks</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="border rounded-lg p-4">
+            <div className="text-3xl font-bold">
+              {data.summary.usersWithStreak3Plus.value}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Users with 3+ day streaks
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {data.summary.usersWithStreak3Plus.percentage.toFixed(1)}% of
+              active users
+            </div>
+          </div>
+          <div className="border rounded-lg p-4">
+            <div className="text-3xl font-bold">
+              {data.summary.usersWithStreak7Plus.value}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Users with 7+ day streaks
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {data.summary.usersWithStreak7Plus.percentage.toFixed(1)}% of
+              active users
+            </div>
+          </div>
+          <div className="border rounded-lg p-4">
+            <div className="text-3xl font-bold">
+              {data.summary.usersWithStreak14Plus.value}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Users with 14+ day streaks
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {data.summary.usersWithStreak14Plus.percentage.toFixed(1)}% of
+              active users
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ARPPA */}
+      {Object.keys(data.arppa).length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-4">
+            Average Practices per Active User (ARPPA)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {Object.entries(data.arppa).map(([type, value]) => (
+              <div key={type} className="border rounded-lg p-4">
+                <div className="text-2xl font-bold">
+                  {(value as number).toFixed(1)}
+                </div>
+                <div className="text-sm text-muted-foreground capitalize">
+                  {type}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top Streaks */}
+      {data.topStreaks.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-4">Top Practice Streaks</h3>
+          <div className="overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Rank</TableHead>
+                  <TableHead>Days with Practice</TableHead>
+                  <TableHead>Practice Types</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.topStreaks.map((streak: any, index: number) => (
+                  <TableRow key={index}>
+                    <TableCell className="font-medium">#{index + 1}</TableCell>
+                    <TableCell>{streak.daysWithPractice}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1 flex-wrap">
+                        {streak.practiceTypes.map((type: string) => (
+                          <span
+                            key={type}
+                            className="inline-flex items-center rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+                          >
+                            {type}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
