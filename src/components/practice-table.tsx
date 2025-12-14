@@ -101,6 +101,16 @@ export const trialSchema = z.object({
   count: z.number(),
 });
 
+export const sessionSchema = z.object({
+  sessionId: z.string(),
+  practiceId: z.string(),
+  practiceName: z.string(),
+  practiceType: z.string(),
+  userId: z.string(),
+  timestamp: z.string(),
+  completed: z.boolean(),
+});
+
 function stripHtmlTags(text: string): string {
   return text.replace(/<[^>]*>/g, "");
 }
@@ -268,6 +278,120 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
 ];
 
+const sessionColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
+  {
+    accessorKey: "practiceId",
+    header: "Practice ID",
+    cell: ({ row }) => (
+      <div className="w-32">
+        <CopyableTooltip text={row.original.practiceId} />
+      </div>
+    ),
+  },
+  {
+    accessorKey: "practiceName",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      >
+        Practice Name
+        <IconChevronDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const cleanName = stripHtmlTags(row.original.practiceName);
+      return (
+        <div className="w-64">
+          <CopyableTooltip text={cleanName} />
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "practiceType",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      >
+        Type
+        <IconChevronDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      let displayType = row.original.practiceType;
+      if (displayType === "Practice") {
+        const practice = findPracticeById(row.original.practiceId);
+        if (practice) {
+          displayType = formatPracticeType(practice.type);
+        } else {
+          displayType = "Not Found";
+        }
+      } else {
+        displayType = formatPracticeType(displayType);
+      }
+      return <div className="w-32">{displayType}</div>;
+    },
+  },
+  {
+    accessorKey: "userId",
+    header: "User ID",
+    cell: ({ row }) => (
+      <div className="w-32">
+        <CopyableTooltip text={row.original.userId} />
+      </div>
+    ),
+  },
+  {
+    accessorKey: "timestamp",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      >
+        Date
+        <IconChevronDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => {
+      const date = new Date(row.original.timestamp);
+      return (
+        <div className="w-40">
+          {date.toLocaleString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "completed",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      >
+        Completed
+        <IconChevronDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => (
+      <div className="w-24">
+        {row.original.completed ? (
+          <span className="text-green-600">✓ Yes</span>
+        ) : (
+          <span className="text-muted-foreground">✗ No</span>
+        )}
+      </div>
+    ),
+  },
+];
+
 function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
   const { transform, transition, setNodeRef, isDragging } = useSortable({
     id: row.original.id,
@@ -316,6 +440,19 @@ export function PracticeTable({}: {}) {
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
+  });
+
+  // Session state
+  const [sessionData, setSessionData] = React.useState<
+    z.infer<typeof sessionSchema>[]
+  >([]);
+  const [isSessionLoading, setIsSessionLoading] = React.useState(true);
+  const [sessionSorting, setSessionSorting] = React.useState<SortingState>([
+    { id: "timestamp", desc: true },
+  ]);
+  const [sessionPagination, setSessionPagination] = React.useState({
+    pageIndex: 0,
+    pageSize: 20,
   });
 
   const fetchPracticesData = React.useCallback(async (range: string) => {
@@ -467,15 +604,41 @@ export function PracticeTable({}: {}) {
     }
   }, []);
 
+  const fetchSessionsData = React.useCallback(async (range: string) => {
+    setIsSessionLoading(true);
+    try {
+      const response = await fetch(
+        `/api/practices/sessions?timeRange=${range}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch sessions data");
+      }
+
+      const apiData = await response.json();
+      setSessionData(apiData);
+    } catch (error) {
+      console.error("Error fetching sessions data:", error);
+      setSessionData([]);
+    } finally {
+      setIsSessionLoading(false);
+    }
+  }, []);
+
   React.useEffect(() => {
     fetchPracticesData(timeRange);
     fetchPracticeTypesData(timeRange);
     fetchTrialConversionData(timeRange);
+    fetchSessionsData(timeRange);
   }, [
     timeRange,
     fetchPracticesData,
     fetchPracticeTypesData,
     fetchTrialConversionData,
+    fetchSessionsData,
   ]);
   const sortableId = React.useId();
   const sensors = useSensors(
@@ -514,6 +677,21 @@ export function PracticeTable({}: {}) {
     getFacetedUniqueValues: getFacetedUniqueValues(),
   });
 
+  const sessionTable = useReactTable({
+    data: sessionData,
+    columns: sessionColumns,
+    state: {
+      sorting: sessionSorting,
+      pagination: sessionPagination,
+    },
+    getRowId: (row) => row.sessionId,
+    onSortingChange: setSessionSorting,
+    onPaginationChange: setSessionPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
   return (
     <Tabs
       defaultValue="practices"
@@ -535,6 +713,7 @@ export function PracticeTable({}: {}) {
             <SelectItem value="practices">Practices</SelectItem>
             <SelectItem value="practice-types">Practice types</SelectItem>
             <SelectItem value="trial-table">Trial Table</SelectItem>
+            <SelectItem value="all-sessions">All Sessions</SelectItem>
             <SelectItem value="habits">Habits</SelectItem>
           </SelectContent>
         </Select>
@@ -542,6 +721,7 @@ export function PracticeTable({}: {}) {
           <TabsTrigger value="practices">Practices</TabsTrigger>
           <TabsTrigger value="practice-types">Practice types</TabsTrigger>
           <TabsTrigger value="trial-table">Trial Table</TabsTrigger>
+          <TabsTrigger value="all-sessions">All Sessions</TabsTrigger>
           <TabsTrigger value="habits">Habits</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-2">
@@ -819,6 +999,154 @@ export function PracticeTable({}: {}) {
               {trialError}
             </div>
           ) : null}
+        </div>
+      </TabsContent>
+      <TabsContent
+        value="all-sessions"
+        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+      >
+        <div className="overflow-hidden rounded-lg border">
+          <Table>
+            <TableHeader className="bg-muted sticky top-0 z-10">
+              {sessionTable.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {isSessionLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={sessionColumns.length}
+                    className="h-24 text-center"
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <IconLoader className="h-4 w-4 animate-spin" />
+                      Loading sessions...
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : sessionTable.getRowModel().rows?.length ? (
+                sessionTable.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={sessionColumns.length}
+                    className="h-24 text-center"
+                  >
+                    No sessions found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="flex items-center justify-between px-4">
+          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+            Showing {sessionTable.getRowModel().rows.length} of{" "}
+            {sessionTable.getFilteredRowModel().rows.length} session(s).
+          </div>
+          <div className="flex w-full items-center gap-8 lg:w-fit">
+            <div className="hidden items-center gap-2 lg:flex">
+              <Label
+                htmlFor="sessions-rows-per-page"
+                className="text-sm font-medium"
+              >
+                Rows per page
+              </Label>
+              <Select
+                value={`${sessionTable.getState().pagination.pageSize}`}
+                onValueChange={(value) => {
+                  sessionTable.setPageSize(Number(value));
+                }}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="w-20"
+                  id="sessions-rows-per-page"
+                >
+                  <SelectValue
+                    placeholder={sessionTable.getState().pagination.pageSize}
+                  />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  {[10, 20, 30, 40, 50].map((pageSize) => (
+                    <SelectItem key={pageSize} value={`${pageSize}`}>
+                      {pageSize}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex w-fit items-center justify-center text-sm font-medium">
+              Page {sessionTable.getState().pagination.pageIndex + 1} of{" "}
+              {sessionTable.getPageCount()}
+            </div>
+            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex"
+                onClick={() => sessionTable.setPageIndex(0)}
+                disabled={!sessionTable.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to first page</span>
+                <IconChevronsLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => sessionTable.previousPage()}
+                disabled={!sessionTable.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <IconChevronLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => sessionTable.nextPage()}
+                disabled={!sessionTable.getCanNextPage()}
+              >
+                <span className="sr-only">Go to next page</span>
+                <IconChevronRight />
+              </Button>
+              <Button
+                variant="outline"
+                className="hidden size-8 lg:flex"
+                size="icon"
+                onClick={() =>
+                  sessionTable.setPageIndex(sessionTable.getPageCount() - 1)
+                }
+                disabled={!sessionTable.getCanNextPage()}
+              >
+                <span className="sr-only">Go to last page</span>
+                <IconChevronsRight />
+              </Button>
+            </div>
+          </div>
         </div>
       </TabsContent>
       <TabsContent value="habits" className="flex flex-col px-4 lg:px-6">
