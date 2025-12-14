@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   closestCenter,
   DndContext,
@@ -352,9 +353,11 @@ const userDetailColumns: ColumnDef<z.infer<typeof userDetailSchema>>[] = [
 function DraggableRow({
   row,
   type,
+  onClick,
 }: {
   row: Row<any>;
   type: "country" | "user";
+  onClick?: () => void;
 }) {
   const { transform, transition, setNodeRef } = useSortable({
     id: type === "country" ? row.original.country : row.original.userId,
@@ -364,11 +367,16 @@ function DraggableRow({
     <TableRow
       data-state={row.getIsSelected() && "selected"}
       ref={setNodeRef}
-      className="relative z-0"
+      className={`relative z-0 ${
+        type === "user" && onClick
+          ? "cursor-pointer hover:bg-muted/50 transition-colors"
+          : ""
+      }`}
       style={{
         transform: CSS.Transform.toString(transform),
         transition: transition,
       }}
+      onClick={onClick}
     >
       {row.getVisibleCells().map((cell) => (
         <TableCell key={cell.id}>
@@ -380,6 +388,7 @@ function DraggableRow({
 }
 
 export function UsersTable() {
+  const router = useRouter();
   const [timeRange, setTimeRange] = React.useState("7d");
   const [countrySummaryData, setCountrySummaryData] = React.useState<
     z.infer<typeof countrySummarySchema>[]
@@ -757,7 +766,16 @@ export function UsersTable() {
                     strategy={verticalListSortingStrategy}
                   >
                     {userTable.getRowModel().rows.map((row) => (
-                      <DraggableRow key={row.id} row={row} type="user" />
+                      <DraggableRow
+                        key={row.id}
+                        row={row}
+                        type="user"
+                        onClick={() =>
+                          router.push(
+                            `/dashboard/users/${encodeURIComponent(row.original.userId)}`
+                          )
+                        }
+                      />
                     ))}
                   </SortableContext>
                 ) : (

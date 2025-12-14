@@ -1,0 +1,143 @@
+import { NextRequest, NextResponse } from "next/server";
+import { analyzeUserBehavior } from "@/lib/openai";
+import analyticsCapture from "@/utils/ANALYTICS_CAPTURE.json";
+
+const POSTHOG_HOST = process.env.POSTHOG_HOST;
+const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
+const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY;
+
+if (!POSTHOG_API_KEY) {
+  console.error("POSTHOG_API_KEY is not set");
+}
+
+interface PostHogQueryResponse {
+  results?: Array<Array<number | string | Record<string, any>>>;
+  responseData?: {
+    results?: Array<Array<number | string | Record<string, any>>>;
+  };
+}
+
+const TARGET_TIMEZONE = "Europe/Warsaw";
+
+async function queryPostHogArray(
+  query: string
+): Promise<Array<Array<number | string | Record<string, any>>>> {
+  if (!POSTHOG_API_KEY) {
+    throw new Error("POSTHOG_API_KEY is not configured");
+  }
+
+  const apiKey = POSTHOG_API_KEY.trim();
+  const url = `${POSTHOG_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query/`;
+  const body = JSON.stringify({
+    query: {
+      kind: "HogQLQuery",
+      query,
+    },
+  });
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`PostHog API error: ${response.status} - ${errorText}`);
+  }
+
+  const data: PostHogQueryResponse = await response.json();
+  const results = data.results || data.responseData?.results;
+
+  if (!results || results.length === 0) {
+    return [];
+  }
+
+  return results;
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  try {
+    const { userId } = await params;
+    const body = await request.json();
+    const { startDate, endDate } = body;
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "userId is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!startDate || !endDate) {
+      return NextResponse.json(
+        { error: "startDate and endDate are required" },
+        { status: 400 }
+      );
+    }
+
+    const startIso = new Date(startDate).toISOString();
+    const endIso = new Date(endDate).toISOString();
+
+    const environment = "production";
+
+    // Query to fetch ALL events for a specific user
+    const userEventsQuery = `
+      SELECT 
+        timestamp,
+        event,
+        properties
+      FROM events
+      WHERE timestamp >= toDateTime('${startIso}', '${TARGET_TIMEZONE}')
+        AND timestamp < toDateTime('${endIso}', '${TARGET_TIMEZONE}')
+        AND JSONExtractString(properties, 'user_id') = '${userId}'
+        AND JSONExtractString(properties, 'consent_status') = 'granted'
+        AND coalesce(JSONExtractString(properties, 'environment'), 'production') = '${environment}'
+      ORDER BY timestamp DESC
+      LIMIT 100000
+    `;
+
+    console.log("Fetching events for AI analysis:", userId);
+    console.log("Date range:", startIso, "to", endIso);
+
+    const results = await queryPostHogArray(userEventsQuery);
+
+    // Transform results
+    const events = results.map((row) => ({
+      timestamp: String(row[0] || ""),
+      event: String(row[1] || ""),
+      properties: typeof row[2] === "object" ? row[2] : {},
+    }));
+
+    console.log(`Found ${events.length} events for AI analysis`);
+
+    // Analyze user behavior with OpenAI
+    const analysis = await analyzeUserBehavior(
+      events,
+      analyticsCapture as Record<string, string>
+    );
+
+    return NextResponse.json({
+      userId,
+      startDate: startIso,
+      endDate: endIso,
+      totalEvents: events.length,
+      analysis,
+    });
+  } catch (error) {
+    console.error("AI Review API error:", error);
+    return NextResponse.json(
+      {
+        error: "Failed to generate AI review",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}
