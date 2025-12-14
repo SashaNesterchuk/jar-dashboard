@@ -11,14 +11,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { IconChevronDown, IconChevronRight, IconAlertCircle } from "@tabler/icons-react";
+import {
+  IconChevronDown,
+  IconChevronRight,
+  IconAlertCircle,
+} from "@tabler/icons-react";
 import analyticsCapture from "@/utils/ANALYTICS_CAPTURE.json";
 
 const userEventSchema = z.object({
   timestamp: z.string(),
   event: z.string(),
   sessionId: z.string(),
-  properties: z.record(z.any()),
+  properties: z.record(z.string(), z.any()),
 });
 
 type UserEvent = z.infer<typeof userEventSchema>;
@@ -209,7 +213,9 @@ function EventItem({ event }: { event: UserEvent }) {
                         <IconAlertCircle className="h-4 w-4 text-yellow-600 shrink-0" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p className="text-xs">Событие не описано в ANALYTICS_CAPTURE.json</p>
+                        <p className="text-xs">
+                          Событие не описано в ANALYTICS_CAPTURE.json
+                        </p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -247,9 +253,7 @@ function EventItem({ event }: { event: UserEvent }) {
                 ) : (
                   <IconChevronRight className="h-4 w-4" />
                 )}
-                <span>
-                  {Object.keys(displayProperties).length} properties
-                </span>
+                <span>{Object.keys(displayProperties).length} properties</span>
               </button>
 
               {expanded && (
@@ -277,7 +281,11 @@ export function UserEventsTimeline({
     [events]
   );
 
-  const { deduplicated: deduplicatedEvents, duplicateStats, totalRemoved } = deduplicationResult;
+  const {
+    deduplicated: deduplicatedEvents,
+    duplicateStats,
+    totalRemoved,
+  } = deduplicationResult;
 
   const groupedEvents = React.useMemo(
     () => groupEventsByDate(deduplicatedEvents),
@@ -323,13 +331,14 @@ export function UserEventsTimeline({
           <div className="flex items-center gap-2 mb-3">
             <IconAlertCircle className="h-5 w-5 text-blue-600" />
             <p className="text-sm font-medium text-blue-900 dark:text-blue-300">
-              {totalRemoved} duplicate event{totalRemoved !== 1 ? "s" : ""} removed
+              {totalRemoved} duplicate event{totalRemoved !== 1 ? "s" : ""}{" "}
+              removed
             </p>
           </div>
           <p className="text-xs text-blue-700 dark:text-blue-400 mb-2">
             Events that occurred within 500ms were deduplicated
           </p>
-          
+
           {/* Duplicate breakdown */}
           <div className="mt-3 space-y-1">
             <p className="text-xs font-semibold text-blue-800 dark:text-blue-200">
@@ -377,4 +386,3 @@ export function UserEventsTimeline({
     </div>
   );
 }
-
