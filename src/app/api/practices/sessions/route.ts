@@ -18,6 +18,10 @@ interface PostHogQueryResponse {
 const TARGET_TIMEZONE = "Europe/Warsaw";
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
 
+function isDate(value: unknown): value is Date {
+  return value instanceof Date;
+}
+
 async function queryPostHogArray(
   query: string
 ): Promise<Array<Array<number | string>>> {
@@ -117,6 +121,7 @@ interface SessionEvent {
   timestamp: string;
   event: string;
   completionPercentage: number;
+  country: string;
 }
 
 export async function GET(request: NextRequest) {
@@ -148,7 +153,8 @@ export async function GET(request: NextRequest) {
         distinct_id as user_id,
         timestamp,
         event,
-        toInt(coalesce(JSONExtractString(properties,'completion_percentage'), '0')) as completion_percentage
+        toInt(coalesce(JSONExtractString(properties,'completion_percentage'), '0')) as completion_percentage,
+        coalesce(JSONExtractString(properties,'$geoip_country_code'), 'Unknown') as country
       FROM events
       WHERE event IN ('practice_started', 'practice_completed', 'mood_check_in_completed')
         AND timestamp >= toDateTime('${startIso}','Europe/Warsaw')
@@ -173,13 +179,13 @@ export async function GET(request: NextRequest) {
       const userId = String(row[4] || "");
       // row[5] is timestamp - could be DateTime object or string
       const timestampRaw = row[5];
-      const timestamp =
-        timestampRaw instanceof Date
-          ? timestampRaw.toISOString()
-          : String(timestampRaw || "");
+      const timestamp = isDate(timestampRaw)
+        ? timestampRaw.toISOString()
+        : String(timestampRaw || "");
       const event = String(row[6] || "");
       const completionPercentage =
         typeof row[7] === "number" ? row[7] : Number(row[7]) || 0;
+      const country = String(row[8] || "Unknown");
 
       if (!sessionId || !practiceId || !userId || !timestamp) {
         continue;
@@ -226,6 +232,7 @@ export async function GET(request: NextRequest) {
           timestamp,
           event,
           completionPercentage,
+          country,
         });
       }
     }
@@ -245,6 +252,7 @@ export async function GET(request: NextRequest) {
         userId: session.userId,
         timestamp: session.timestamp,
         completed,
+        country: session.country,
       };
     });
 

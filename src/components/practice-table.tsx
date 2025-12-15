@@ -25,6 +25,9 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconLoader,
+  IconArrowUp,
+  IconArrowDown,
+  IconSelector,
 } from "@tabler/icons-react";
 import {
   ColumnDef,
@@ -109,10 +112,23 @@ export const sessionSchema = z.object({
   userId: z.string(),
   timestamp: z.string(),
   completed: z.boolean(),
+  country: z.string(),
 });
 
 function stripHtmlTags(text: string): string {
   return text.replace(/<[^>]*>/g, "");
+}
+
+function getCountryFlag(countryCode: string): string {
+  if (!countryCode || countryCode === "Unknown" || countryCode.length !== 2) {
+    return "🏳️";
+  }
+
+  const codePoints = countryCode
+    .toUpperCase()
+    .split("")
+    .map((char) => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
 }
 
 function formatPracticeType(value?: string | null) {
@@ -225,6 +241,43 @@ const CopyableTooltip = ({ text }: { text: string }) => {
   );
 };
 
+// Sortable Header Component
+function SortableHeader({
+  column,
+  children,
+}: {
+  column: any;
+  children: React.ReactNode;
+}) {
+  const isSorted = column.getIsSorted();
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="-ml-3 h-8 data-[state=open]:bg-accent"
+      onClick={() => {
+        if (isSorted === "asc") {
+          column.toggleSorting(true);
+        } else if (isSorted === "desc") {
+          column.clearSorting();
+        } else {
+          column.toggleSorting(false);
+        }
+      }}
+    >
+      <span>{children}</span>
+      {isSorted === "asc" ? (
+        <IconArrowUp className="ml-2 h-4 w-4" />
+      ) : isSorted === "desc" ? (
+        <IconArrowDown className="ml-2 h-4 w-4" />
+      ) : (
+        <IconSelector className="ml-2 h-4 w-4" />
+      )}
+    </Button>
+  );
+}
+
 const columns: ColumnDef<z.infer<typeof schema>>[] = [
   {
     accessorKey: "id",
@@ -291,13 +344,7 @@ const sessionColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
   {
     accessorKey: "practiceName",
     header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      >
-        Practice Name
-        <IconChevronDown className="ml-2 h-4 w-4" />
-      </Button>
+      <SortableHeader column={column}>Practice Name</SortableHeader>
     ),
     cell: ({ row }) => {
       const cleanName = stripHtmlTags(row.original.practiceName);
@@ -311,13 +358,7 @@ const sessionColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
   {
     accessorKey: "practiceType",
     header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      >
-        Type
-        <IconChevronDown className="ml-2 h-4 w-4" />
-      </Button>
+      <SortableHeader column={column}>Type</SortableHeader>
     ),
     cell: ({ row }) => {
       let displayType = row.original.practiceType;
@@ -344,15 +385,28 @@ const sessionColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
     ),
   },
   {
+    accessorKey: "country",
+    header: ({ column }) => (
+      <SortableHeader column={column}>Country</SortableHeader>
+    ),
+    cell: ({ row }) => {
+      const country = row.original.country;
+      const flag = getCountryFlag(country);
+      return (
+        <div className="flex items-center gap-2 w-24">
+          <span className="text-xl">{flag}</span>
+          <span>{country}</span>
+        </div>
+      );
+    },
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id));
+    },
+  },
+  {
     accessorKey: "timestamp",
     header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      >
-        Date
-        <IconChevronDown className="ml-2 h-4 w-4" />
-      </Button>
+      <SortableHeader column={column}>Date</SortableHeader>
     ),
     cell: ({ row }) => {
       const date = new Date(row.original.timestamp);
@@ -372,13 +426,7 @@ const sessionColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
   {
     accessorKey: "completed",
     header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      >
-        Completed
-        <IconChevronDown className="ml-2 h-4 w-4" />
-      </Button>
+      <SortableHeader column={column}>Completed</SortableHeader>
     ),
     cell: ({ row }) => (
       <div className="w-24">
@@ -454,6 +502,9 @@ export function PracticeTable({}: {}) {
     pageIndex: 0,
     pageSize: 20,
   });
+  const [sessionColumnFilters, setSessionColumnFilters] =
+    React.useState<ColumnFiltersState>([]);
+  const [uaeFilterEnabled, setUaeFilterEnabled] = React.useState(false);
 
   const fetchPracticesData = React.useCallback(async (range: string) => {
     setIsLoading(true);
@@ -683,14 +734,28 @@ export function PracticeTable({}: {}) {
     state: {
       sorting: sessionSorting,
       pagination: sessionPagination,
+      columnFilters: sessionColumnFilters,
     },
     getRowId: (row) => row.sessionId,
     onSortingChange: setSessionSorting,
     onPaginationChange: setSessionPagination,
+    onColumnFiltersChange: setSessionColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
   });
+
+  // Update filter when UAE toggle changes
+  React.useEffect(() => {
+    if (uaeFilterEnabled) {
+      sessionTable.getColumn("country")?.setFilterValue(["AE"]);
+    } else {
+      sessionTable.getColumn("country")?.setFilterValue(undefined);
+    }
+  }, [uaeFilterEnabled, sessionTable]);
 
   return (
     <Tabs
@@ -1005,6 +1070,21 @@ export function PracticeTable({}: {}) {
         value="all-sessions"
         className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
       >
+        <div className="flex items-center gap-4 mb-2">
+          <Button
+            variant={uaeFilterEnabled ? "default" : "outline"}
+            size="sm"
+            onClick={() => setUaeFilterEnabled(!uaeFilterEnabled)}
+          >
+            {uaeFilterEnabled ? "🇦🇪 UAE Only" : "Show UAE Only"}
+          </Button>
+          {uaeFilterEnabled && (
+            <span className="text-sm text-muted-foreground">
+              Showing {sessionTable.getFilteredRowModel().rows.length} of{" "}
+              {sessionData.length} sessions
+            </span>
+          )}
+        </div>
         <div className="overflow-hidden rounded-lg border">
           <Table>
             <TableHeader className="bg-muted sticky top-0 z-10">
