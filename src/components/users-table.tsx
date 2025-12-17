@@ -92,6 +92,12 @@ export const userDetailSchema = z.object({
   selfDiscoveryCount: z.number(),
 });
 
+export const deviceSummarySchema = z.object({
+  deviceType: z.string(),
+  osVersion: z.string(),
+  userCount: z.number(),
+});
+
 // Helper functions
 function getCountryFlag(countryCode: string): string {
   if (!countryCode || countryCode.length !== 2) {
@@ -350,17 +356,62 @@ const userDetailColumns: ColumnDef<z.infer<typeof userDetailSchema>>[] = [
   },
 ];
 
+// Device Summary Table Columns
+const deviceSummaryColumns: ColumnDef<z.infer<typeof deviceSummarySchema>>[] = [
+  {
+    accessorKey: "deviceType",
+    header: ({ column }) => (
+      <SortableHeader column={column}>Device Type</SortableHeader>
+    ),
+    cell: ({ row }) => {
+      const deviceType = row.original.deviceType;
+      const icon = deviceType === "iOS" ? "🍎" : "🤖";
+      return (
+        <div className="flex items-center gap-2 w-40">
+          <span className="text-2xl">{icon}</span>
+          <span className="font-medium">{deviceType}</span>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "osVersion",
+    header: ({ column }) => (
+      <SortableHeader column={column}>OS Version</SortableHeader>
+    ),
+    cell: ({ row }) => (
+      <div className="w-32 font-medium">{row.original.osVersion}</div>
+    ),
+  },
+  {
+    accessorKey: "userCount",
+    header: ({ column }) => (
+      <SortableHeader column={column}>Users</SortableHeader>
+    ),
+    cell: ({ row }) => (
+      <div className="w-32 font-medium">
+        {row.original.userCount.toLocaleString()}
+      </div>
+    ),
+  },
+];
+
 function DraggableRow({
   row,
   type,
   onClick,
 }: {
   row: Row<any>;
-  type: "country" | "user";
+  type: "country" | "user" | "device";
   onClick?: () => void;
 }) {
   const { transform, transition, setNodeRef } = useSortable({
-    id: type === "country" ? row.original.country : row.original.userId,
+    id:
+      type === "country"
+        ? row.original.country
+        : type === "user"
+        ? row.original.userId
+        : `${row.original.deviceType}-${row.original.osVersion}`,
   });
 
   return (
@@ -396,7 +447,11 @@ export function UsersTable() {
   const [userDetailData, setUserDetailData] = React.useState<
     z.infer<typeof userDetailSchema>[]
   >([]);
+  const [deviceSummaryData, setDeviceSummaryData] = React.useState<
+    z.infer<typeof deviceSummarySchema>[]
+  >([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isDeviceLoading, setIsDeviceLoading] = React.useState(true);
 
   // Country Summary Table State
   const [countrySorting, setCountrySorting] = React.useState<SortingState>([
@@ -419,6 +474,15 @@ export function UsersTable() {
     React.useState<VisibilityState>({});
   const [userColumnFilters, setUserColumnFilters] =
     React.useState<ColumnFiltersState>([]);
+
+  // Device Summary Table State
+  const [deviceSorting, setDeviceSorting] = React.useState<SortingState>([
+    { id: "userCount", desc: true },
+  ]);
+  const [devicePagination, setDevicePagination] = React.useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
 
   const fetchUsersData = React.useCallback(async (range: string) => {
     setIsLoading(true);
@@ -448,6 +512,32 @@ export function UsersTable() {
     fetchUsersData(timeRange);
   }, [timeRange, fetchUsersData]);
 
+  const fetchDevicesData = React.useCallback(async () => {
+    setIsDeviceLoading(true);
+    try {
+      const response = await fetch("/api/devices", {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch devices data");
+      }
+
+      const apiData = await response.json();
+
+      setDeviceSummaryData(apiData.devices || []);
+    } catch (error) {
+      console.error("Error fetching devices data:", error);
+      setDeviceSummaryData([]);
+    } finally {
+      setIsDeviceLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchDevicesData();
+  }, [fetchDevicesData]);
+
   const sortableId = React.useId();
   const sensors = useSensors(
     useSensor(MouseSensor, {}),
@@ -463,6 +553,14 @@ export function UsersTable() {
   const userDataIds = React.useMemo<UniqueIdentifier[]>(
     () => userDetailData?.map(({ userId }) => userId) || [],
     [userDetailData]
+  );
+
+  const deviceDataIds = React.useMemo<UniqueIdentifier[]>(
+    () =>
+      deviceSummaryData?.map(
+        ({ deviceType, osVersion }) => `${deviceType}-${osVersion}`
+      ) || [],
+    [deviceSummaryData]
   );
 
   const countryTable = useReactTable({
@@ -506,6 +604,23 @@ export function UsersTable() {
     getFacetedUniqueValues: getFacetedUniqueValues(),
   });
 
+  const deviceTable = useReactTable({
+    data: deviceSummaryData,
+    columns: deviceSummaryColumns,
+    state: {
+      sorting: deviceSorting,
+      pagination: devicePagination,
+    },
+    enableSorting: true,
+    enableMultiSort: false,
+    getRowId: (row) => `${row.deviceType}-${row.osVersion}`,
+    onSortingChange: setDeviceSorting,
+    onPaginationChange: setDevicePagination,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
   return (
     <Tabs
       defaultValue="country-summary"
@@ -526,11 +641,13 @@ export function UsersTable() {
           <SelectContent>
             <SelectItem value="country-summary">Country Summary</SelectItem>
             <SelectItem value="user-details">User Details</SelectItem>
+            <SelectItem value="devices">Devices</SelectItem>
           </SelectContent>
         </Select>
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
           <TabsTrigger value="country-summary">Country Summary</TabsTrigger>
           <TabsTrigger value="user-details">User Details</TabsTrigger>
+          <TabsTrigger value="devices">Devices</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-2">
           <ToggleGroup
@@ -772,7 +889,9 @@ export function UsersTable() {
                         type="user"
                         onClick={() =>
                           router.push(
-                            `/dashboard/users/${encodeURIComponent(row.original.userId)}`
+                            `/dashboard/users/${encodeURIComponent(
+                              row.original.userId
+                            )}`
                           )
                         }
                       />
@@ -870,6 +989,158 @@ export function UsersTable() {
                   userTable.setPageIndex(userTable.getPageCount() - 1)
                 }
                 disabled={!userTable.getCanNextPage()}
+              >
+                <span className="sr-only">Go to last page</span>
+                <IconChevronsRight />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </TabsContent>
+
+      {/* Devices Tab */}
+      <TabsContent
+        value="devices"
+        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+      >
+        <div className="overflow-hidden rounded-lg border">
+          <DndContext
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            sensors={sensors}
+            id={sortableId + "-device"}
+          >
+            <Table>
+              <TableHeader className="bg-muted sticky top-0 z-10">
+                {deviceTable.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} colSpan={header.colSpan}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {isDeviceLoading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={deviceSummaryColumns.length}
+                      className="h-24 text-center"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <IconLoader className="h-4 w-4 animate-spin" />
+                        Loading devices...
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : deviceTable.getRowModel().rows?.length ? (
+                  <SortableContext
+                    items={deviceDataIds}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {deviceTable.getRowModel().rows.map((row) => (
+                      <DraggableRow key={row.id} row={row} type="device" />
+                    ))}
+                  </SortableContext>
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={deviceSummaryColumns.length}
+                      className="h-24 text-center"
+                    >
+                      No results.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </DndContext>
+        </div>
+        <div className="flex items-center justify-between px-4">
+          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+            {deviceTable.getFilteredRowModel().rows.length} devices
+          </div>
+          <div className="flex w-full items-center gap-8 lg:w-fit">
+            <div className="hidden items-center gap-2 lg:flex">
+              <Label
+                htmlFor="device-rows-per-page"
+                className="text-sm font-medium"
+              >
+                Rows per page
+              </Label>
+              <Select
+                value={`${deviceTable.getState().pagination.pageSize}`}
+                onValueChange={(value) => {
+                  deviceTable.setPageSize(Number(value));
+                }}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="w-20"
+                  id="device-rows-per-page"
+                >
+                  <SelectValue
+                    placeholder={deviceTable.getState().pagination.pageSize}
+                  />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  {[10, 20, 30, 40, 50].map((pageSize) => (
+                    <SelectItem key={pageSize} value={`${pageSize}`}>
+                      {pageSize}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex w-fit items-center justify-center text-sm font-medium">
+              Page {deviceTable.getState().pagination.pageIndex + 1} of{" "}
+              {deviceTable.getPageCount()}
+            </div>
+            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex"
+                onClick={() => deviceTable.setPageIndex(0)}
+                disabled={!deviceTable.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to first page</span>
+                <IconChevronsLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => deviceTable.previousPage()}
+                disabled={!deviceTable.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <IconChevronLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => deviceTable.nextPage()}
+                disabled={!deviceTable.getCanNextPage()}
+              >
+                <span className="sr-only">Go to next page</span>
+                <IconChevronRight />
+              </Button>
+              <Button
+                variant="outline"
+                className="hidden size-8 lg:flex"
+                size="icon"
+                onClick={() =>
+                  deviceTable.setPageIndex(deviceTable.getPageCount() - 1)
+                }
+                disabled={!deviceTable.getCanNextPage()}
               >
                 <span className="sr-only">Go to last page</span>
                 <IconChevronsRight />
