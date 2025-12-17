@@ -1,0 +1,17 @@
+name: Hourly Push Notification Check
+
+on:
+  schedule:
+    - cron: "0 * * * *" # каждый час в начале часа (00 минут)
+  workflow_dispatch:
+
+jobs:
+  send-scheduled-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Supabase Edge Function - Send Scheduled Notifications
+        run: |
+          curl -X POST "${{ secrets.SUPABASE_FUNCTION_URL }}/send-scheduled-notifications" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
