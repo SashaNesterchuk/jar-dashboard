@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE!;
 
 if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error("Missing Supabase environment variables");
@@ -34,7 +35,11 @@ export async function POST(req: NextRequest) {
     // Validate content structure
     for (const [lang, content] of Object.entries(body.content)) {
       const langContent = content as any;
-      if (!langContent.title || !langContent.bodyShort || !langContent.bodyLong) {
+      if (
+        !langContent.title ||
+        !langContent.bodyShort ||
+        !langContent.bodyLong
+      ) {
         return Response.json(
           { error: `Invalid content structure for language: ${lang}` },
           { status: 400 }
@@ -56,10 +61,7 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error("Error creating notification:", error);
-      return Response.json(
-        { error: error.message },
-        { status: 500 }
-      );
+      return Response.json({ error: error.message }, { status: 500 });
     }
 
     return Response.json({ data }, { status: 201 });
@@ -95,10 +97,7 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error("Error fetching notifications:", error);
-      return Response.json(
-        { error: error.message },
-        { status: 500 }
-      );
+      return Response.json({ error: error.message }, { status: 500 });
     }
 
     return Response.json({ data }, { status: 200 });
@@ -153,10 +152,7 @@ export async function DELETE(req: NextRequest) {
 
     if (error) {
       console.error("Error deleting notification:", error);
-      return Response.json(
-        { error: error.message },
-        { status: 500 }
-      );
+      return Response.json({ error: error.message }, { status: 500 });
     }
 
     return Response.json({ success: true }, { status: 200 });
@@ -168,4 +164,3 @@ export async function DELETE(req: NextRequest) {
     );
   }
 }
-

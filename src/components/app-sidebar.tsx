@@ -17,6 +17,7 @@ import {
   IconSearch,
   IconSettings,
   IconUsers,
+  IconBell,
 } from "@tabler/icons-react";
 
 import { NavDocuments } from "@/components/nav-documents";
@@ -40,6 +41,16 @@ const data = {
     avatar: "/avatars/shadcn.jpg",
   },
   navMain: [
+    {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: <IconDashboard className="w-5 h-5" />,
+    },
+    {
+      title: "Notifications",
+      url: "/dashboard/notifications",
+      icon: <IconBell className="w-5 h-5" />,
+    },
     {
       title: "Mind Jar",
       url: "#",

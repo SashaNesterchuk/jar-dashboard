@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { IconPlus, IconX, IconCheck } from "@tabler/icons-react";
+import { IconPlus, IconX, IconCheck, IconSparkles } from "@tabler/icons-react";
 import { toast } from "sonner";
 
 interface NotificationContent {
@@ -44,7 +44,11 @@ const CHARACTER_LIMITS = {
   bodyLong: { min: 180, max: 250 },
 };
 
-export function NotificationScheduler() {
+interface NotificationSchedulerProps {
+  onSuccess?: () => void;
+}
+
+export function NotificationScheduler({ onSuccess }: NotificationSchedulerProps = {}) {
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
   const [activeLanguages, setActiveLanguages] = useState<string[]>(["en"]);
@@ -52,6 +56,7 @@ export function NotificationScheduler() {
     en: { title: "", bodyShort: "", bodyLong: "" },
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
 
   const availableToAdd = AVAILABLE_LANGUAGES.filter(
     (lang) => !activeLanguages.includes(lang.code)
@@ -103,6 +108,53 @@ export function NotificationScheduler() {
 
   const getLangName = (code: string) => {
     return AVAILABLE_LANGUAGES.find((lang) => lang.code === code)?.name || code.toUpperCase();
+  };
+
+  const canTranslate =
+    content.en.title.length > 0 &&
+    content.en.bodyShort.length > 0 &&
+    content.en.bodyLong.length > 0;
+
+  const handleAITranslate = async () => {
+    if (!canTranslate) return;
+
+    setIsTranslating(true);
+
+    try {
+      const response = await fetch("/api/translate-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: content.en.title,
+          bodyShort: content.en.bodyShort,
+          bodyLong: content.en.bodyLong,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Translation failed");
+      }
+
+      const translations = await response.json();
+
+      // Add all translated languages
+      const allLangs = ["en", ...Object.keys(translations)];
+      setActiveLanguages(allLangs);
+
+      // Merge translations with existing English content
+      setContent({
+        en: content.en,
+        ...translations,
+      });
+
+      toast.success("All languages translated successfully!");
+    } catch (error: any) {
+      console.error("Translation error:", error);
+      toast.error(error.message || "Translation failed. Please try again.");
+    } finally {
+      setIsTranslating(false);
+    }
   };
 
   const validateForm = () => {
@@ -168,6 +220,9 @@ export function NotificationScheduler() {
 
       toast.success("Notification scheduled successfully!");
       resetForm();
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (error: any) {
       console.error("Error saving notification:", error);
       toast.error(error.message || "Failed to save notification");
@@ -213,20 +268,32 @@ export function NotificationScheduler() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label>Languages</Label>
-            {availableToAdd.length > 0 && (
-              <Select onValueChange={addLanguage}>
-                <SelectTrigger className="w-[180px] h-8">
-                  <SelectValue placeholder="Add language" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableToAdd.map((lang) => (
-                    <SelectItem key={lang.code} value={lang.code}>
-                      {lang.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAITranslate}
+                disabled={!canTranslate || isTranslating}
+                className="h-8"
+              >
+                <IconSparkles size={16} className="mr-2" />
+                {isTranslating ? "Translating..." : "AI Translate"}
+              </Button>
+              {availableToAdd.length > 0 && (
+                <Select onValueChange={addLanguage}>
+                  <SelectTrigger className="w-[180px] h-8">
+                    <SelectValue placeholder="Add language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableToAdd.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
 
           {/* Language Tabs */}
