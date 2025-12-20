@@ -79,6 +79,11 @@ export const countrySummarySchema = z.object({
   userCount: z.number(),
 });
 
+export const citySummarySchema = z.object({
+  city: z.string(),
+  userCount: z.number(),
+});
+
 export const userDetailSchema = z.object({
   userId: z.string(),
   userName: z.string().optional(),
@@ -256,6 +261,35 @@ const countrySummaryColumns: ColumnDef<z.infer<typeof countrySummarySchema>>[] =
     },
   ];
 
+// City Summary Table Columns
+const citySummaryColumns: ColumnDef<z.infer<typeof citySummarySchema>>[] = [
+  {
+    accessorKey: "city",
+    header: ({ column }) => (
+      <SortableHeader column={column}>City</SortableHeader>
+    ),
+    cell: ({ row }) => {
+      const city = row.original.city;
+      return (
+        <div className="flex items-center gap-2 w-48">
+          <span className="font-medium">{city}</span>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "userCount",
+    header: ({ column }) => (
+      <SortableHeader column={column}>Users</SortableHeader>
+    ),
+    cell: ({ row }) => (
+      <div className="w-32 font-medium">
+        {row.original.userCount.toLocaleString()}
+      </div>
+    ),
+  },
+];
+
 // User Detail Table Columns
 const userDetailColumns: ColumnDef<z.infer<typeof userDetailSchema>>[] = [
   {
@@ -414,13 +448,15 @@ function DraggableRow({
   onClick,
 }: {
   row: Row<any>;
-  type: "country" | "user" | "device";
+  type: "country" | "city" | "user" | "device";
   onClick?: () => void;
 }) {
   const { transform, transition, setNodeRef } = useSortable({
     id:
       type === "country"
         ? row.original.country
+        : type === "city"
+        ? row.original.city
         : type === "user"
         ? row.original.userId
         : `${row.original.deviceType}-${row.original.osVersion}`,
@@ -456,6 +492,9 @@ export function UsersTable() {
   const [countrySummaryData, setCountrySummaryData] = React.useState<
     z.infer<typeof countrySummarySchema>[]
   >([]);
+  const [citySummaryData, setCitySummaryData] = React.useState<
+    z.infer<typeof citySummarySchema>[]
+  >([]);
   const [userDetailData, setUserDetailData] = React.useState<
     z.infer<typeof userDetailSchema>[]
   >([]);
@@ -470,6 +509,15 @@ export function UsersTable() {
     { id: "userCount", desc: true },
   ]);
   const [countryPagination, setCountryPagination] = React.useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+
+  // City Summary Table State
+  const [citySorting, setCitySorting] = React.useState<SortingState>([
+    { id: "userCount", desc: true },
+  ]);
+  const [cityPagination, setCityPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
   });
@@ -509,11 +557,16 @@ export function UsersTable() {
 
       const apiData = await response.json();
 
+      console.log("API response citySummary:", apiData.citySummary);
+      console.log("City summary count:", apiData.citySummary?.length || 0);
+
       setCountrySummaryData(apiData.countrySummary || []);
+      setCitySummaryData(apiData.citySummary || []);
       setUserDetailData(apiData.users || []);
     } catch (error) {
       console.error("Error fetching users data:", error);
       setCountrySummaryData([]);
+      setCitySummaryData([]);
       setUserDetailData([]);
     } finally {
       setIsLoading(false);
@@ -562,6 +615,11 @@ export function UsersTable() {
     [countrySummaryData]
   );
 
+  const cityDataIds = React.useMemo<UniqueIdentifier[]>(
+    () => citySummaryData?.map(({ city }) => city) || [],
+    [citySummaryData]
+  );
+
   const userDataIds = React.useMemo<UniqueIdentifier[]>(
     () => userDetailData?.map(({ userId }) => userId) || [],
     [userDetailData]
@@ -587,6 +645,23 @@ export function UsersTable() {
     getRowId: (row) => row.country,
     onSortingChange: setCountrySorting,
     onPaginationChange: setCountryPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  const cityTable = useReactTable({
+    data: citySummaryData,
+    columns: citySummaryColumns,
+    state: {
+      sorting: citySorting,
+      pagination: cityPagination,
+    },
+    enableSorting: true,
+    enableMultiSort: false,
+    getRowId: (row) => row.city,
+    onSortingChange: setCitySorting,
+    onPaginationChange: setCityPagination,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -652,12 +727,14 @@ export function UsersTable() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="country-summary">Country Summary</SelectItem>
+            <SelectItem value="city-summary">City Summary</SelectItem>
             <SelectItem value="user-details">User Details</SelectItem>
             <SelectItem value="devices">Devices</SelectItem>
           </SelectContent>
         </Select>
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
           <TabsTrigger value="country-summary">Country Summary</TabsTrigger>
+          <TabsTrigger value="city-summary">City Summary</TabsTrigger>
           <TabsTrigger value="user-details">User Details</TabsTrigger>
           <TabsTrigger value="devices">Devices</TabsTrigger>
         </TabsList>
@@ -838,6 +915,158 @@ export function UsersTable() {
                   countryTable.setPageIndex(countryTable.getPageCount() - 1)
                 }
                 disabled={!countryTable.getCanNextPage()}
+              >
+                <span className="sr-only">Go to last page</span>
+                <IconChevronsRight />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </TabsContent>
+
+      {/* City Summary Tab */}
+      <TabsContent
+        value="city-summary"
+        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+      >
+        <div className="overflow-hidden rounded-lg border">
+          <DndContext
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            sensors={sensors}
+            id={sortableId + "-city"}
+          >
+            <Table>
+              <TableHeader className="bg-muted sticky top-0 z-10">
+                {cityTable.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} colSpan={header.colSpan}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={citySummaryColumns.length}
+                      className="h-24 text-center"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <IconLoader className="h-4 w-4 animate-spin" />
+                        Loading cities...
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : cityTable.getRowModel().rows?.length ? (
+                  <SortableContext
+                    items={cityDataIds}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {cityTable.getRowModel().rows.map((row) => (
+                      <DraggableRow key={row.id} row={row} type="city" />
+                    ))}
+                  </SortableContext>
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={citySummaryColumns.length}
+                      className="h-24 text-center"
+                    >
+                      No results.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </DndContext>
+        </div>
+        <div className="flex items-center justify-between px-4">
+          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+            {cityTable.getFilteredRowModel().rows.length} cities
+          </div>
+          <div className="flex w-full items-center gap-8 lg:w-fit">
+            <div className="hidden items-center gap-2 lg:flex">
+              <Label
+                htmlFor="city-rows-per-page"
+                className="text-sm font-medium"
+              >
+                Rows per page
+              </Label>
+              <Select
+                value={`${cityTable.getState().pagination.pageSize}`}
+                onValueChange={(value) => {
+                  cityTable.setPageSize(Number(value));
+                }}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="w-20"
+                  id="city-rows-per-page"
+                >
+                  <SelectValue
+                    placeholder={cityTable.getState().pagination.pageSize}
+                  />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  {[10, 20, 30, 40, 50].map((pageSize) => (
+                    <SelectItem key={pageSize} value={`${pageSize}`}>
+                      {pageSize}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex w-fit items-center justify-center text-sm font-medium">
+              Page {cityTable.getState().pagination.pageIndex + 1} of{" "}
+              {cityTable.getPageCount()}
+            </div>
+            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex"
+                onClick={() => cityTable.setPageIndex(0)}
+                disabled={!cityTable.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to first page</span>
+                <IconChevronsLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => cityTable.previousPage()}
+                disabled={!cityTable.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <IconChevronLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8"
+                size="icon"
+                onClick={() => cityTable.nextPage()}
+                disabled={!cityTable.getCanNextPage()}
+              >
+                <span className="sr-only">Go to next page</span>
+                <IconChevronRight />
+              </Button>
+              <Button
+                variant="outline"
+                className="hidden size-8 lg:flex"
+                size="icon"
+                onClick={() =>
+                  cityTable.setPageIndex(cityTable.getPageCount() - 1)
+                }
+                disabled={!cityTable.getCanNextPage()}
               >
                 <span className="sr-only">Go to last page</span>
                 <IconChevronsRight />

@@ -147,6 +147,32 @@ export async function GET(request: NextRequest) {
       ORDER BY user_count DESC
     `;
 
+    // City Summary Query
+    // Try multiple property name formats - PostHog may store it in different formats
+    // Using COALESCE to try different property names
+    const citySummaryQuery = `
+      SELECT 
+        coalesce(
+          nullIf(JSONExtractString(properties,'Initial city name'), ''),
+          nullIf(JSONExtractString(properties,'$initial_city_name'), ''),
+          nullIf(JSONExtractString(properties,'$geoip_city_name'), ''),
+          nullIf(JSONExtractString(properties,'city'), '')
+        ) as city,
+        uniqExact(JSONExtractString(properties,'user_id')) as user_count
+      FROM events
+      WHERE ${baseFilters}
+        AND JSONExtractString(properties,'user_id') IS NOT NULL
+        AND JSONExtractString(properties,'user_id') != ''
+        AND coalesce(
+          nullIf(JSONExtractString(properties,'Initial city name'), ''),
+          nullIf(JSONExtractString(properties,'$initial_city_name'), ''),
+          nullIf(JSONExtractString(properties,'$geoip_city_name'), ''),
+          nullIf(JSONExtractString(properties,'city'), '')
+        ) IS NOT NULL
+      GROUP BY city
+      ORDER BY user_count DESC
+    `;
+
     // Users Detail Query - batch rapid session_ids into real sessions
     // Session_ids that occur within 5 minutes of each other are considered the same session
     const usersDetailQuery = `
@@ -293,19 +319,62 @@ export async function GET(request: NextRequest) {
 
     console.log("Executing main queries with timeRange:", timeRange);
 
+    // Diagnostic query to check what city properties are available
+    const cityDiagnosticQuery = `
+      SELECT 
+        JSONExtractString(properties,'Initial city name') as city1,
+        JSONExtractString(properties,'$initial_city_name') as city2,
+        JSONExtractString(properties,'$geoip_city_name') as city3,
+        properties
+      FROM events
+      WHERE ${baseFilters}
+        AND JSONExtractString(properties,'user_id') IS NOT NULL
+        AND JSONExtractString(properties,'user_id') != ''
+      LIMIT 5
+    `;
+
+    try {
+      const diagnosticResults = await queryPostHogArray(cityDiagnosticQuery);
+      console.log("City diagnostic results:", diagnosticResults);
+      if (diagnosticResults.length > 0) {
+        console.log(
+          "Sample properties:",
+          JSON.stringify(diagnosticResults[0][3], null, 2)
+        );
+      }
+    } catch (error) {
+      console.error("City diagnostic query error:", error);
+    }
+
     // Execute queries in parallel
-    const [countrySummaryResults, usersDetailResults, sessionDurationResults] =
-      await Promise.all([
-        queryPostHogArray(countrySummaryQuery),
-        queryPostHogArray(usersDetailQuery),
-        queryPostHogArray(sessionDurationQuery),
-      ]);
+    const [
+      countrySummaryResults,
+      citySummaryResults,
+      usersDetailResults,
+      sessionDurationResults,
+    ] = await Promise.all([
+      queryPostHogArray(countrySummaryQuery),
+      queryPostHogArray(citySummaryQuery),
+      queryPostHogArray(usersDetailQuery),
+      queryPostHogArray(sessionDurationQuery),
+    ]);
 
     // Transform country summary results
     const countrySummary = countrySummaryResults.map((row) => ({
       country: String(row[0] || ""),
       userCount: typeof row[1] === "number" ? row[1] : Number(row[1]) || 0,
     }));
+
+    // Transform city summary results
+    console.log("City summary raw results count:", citySummaryResults.length);
+    if (citySummaryResults.length > 0) {
+      console.log("First city result sample:", citySummaryResults[0]);
+    }
+    const citySummary = citySummaryResults.map((row) => ({
+      city: String(row[0] || ""),
+      userCount: typeof row[1] === "number" ? row[1] : Number(row[1]) || 0,
+    }));
+    console.log("City summary transformed count:", citySummary.length);
 
     // Build session duration map
     const sessionDurationMap = new Map<string, number>();
@@ -356,6 +425,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       countrySummary,
+      citySummary,
       users,
       debug: debugInfo,
     });
