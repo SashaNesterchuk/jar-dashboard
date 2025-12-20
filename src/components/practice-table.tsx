@@ -110,6 +110,7 @@ export const sessionSchema = z.object({
   practiceName: z.string(),
   practiceType: z.string(),
   userId: z.string(),
+  userName: z.string().optional(),
   timestamp: z.string(),
   completed: z.boolean(),
   country: z.string(),
@@ -207,7 +208,13 @@ function findPracticeById(id: string): { type: string } | null {
   return practice ? { type: practice.type } : null;
 }
 
-const CopyableTooltip = ({ text }: { text: string }) => {
+const CopyableTooltip = ({
+  text,
+  children,
+}: {
+  text: string;
+  children?: React.ReactNode;
+}) => {
   const [copied, setCopied] = React.useState(false);
 
   const handleCopy = async () => {
@@ -221,7 +228,7 @@ const CopyableTooltip = ({ text }: { text: string }) => {
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <div className="cursor-help overflow-hidden text-ellipsis whitespace-nowrap">
-            {text}
+            {children || text}
           </div>
         </TooltipTrigger>
         <TooltipContent
@@ -378,11 +385,16 @@ const sessionColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
   {
     accessorKey: "userId",
     header: "User ID",
-    cell: ({ row }) => (
-      <div className="w-32">
-        <CopyableTooltip text={row.original.userId} />
-      </div>
-    ),
+    cell: ({ row }) => {
+      const displayName = row.original.userName || row.original.userId;
+      return (
+        <div className="w-32">
+          <CopyableTooltip text={row.original.userId}>
+            {displayName}
+          </CopyableTooltip>
+        </div>
+      );
+    },
   },
   {
     accessorKey: "country",
@@ -658,19 +670,33 @@ export function PracticeTable({}: {}) {
   const fetchSessionsData = React.useCallback(async (range: string) => {
     setIsSessionLoading(true);
     try {
-      const response = await fetch(
-        `/api/practices/sessions?timeRange=${range}`,
-        {
+      const [sessionsResponse, namesResponse] = await Promise.all([
+        fetch(`/api/practices/sessions?timeRange=${range}`, {
           cache: "no-store",
-        }
-      );
+        }),
+        fetch("/api/user-names", {
+          cache: "no-store",
+        }),
+      ]);
 
-      if (!response.ok) {
+      if (!sessionsResponse.ok) {
         throw new Error("Failed to fetch sessions data");
       }
 
-      const apiData = await response.json();
-      setSessionData(apiData);
+      const apiData = await sessionsResponse.json();
+      const userNames: Record<string, string> = namesResponse.ok
+        ? await namesResponse.json()
+        : {};
+
+      // Добавляем имена пользователей к данным сессий
+      const sessionsWithNames = apiData.map(
+        (session: z.infer<typeof sessionSchema>) => ({
+          ...session,
+          userName: userNames[session.userId] || undefined,
+        })
+      );
+
+      setSessionData(sessionsWithNames);
     } catch (error) {
       console.error("Error fetching sessions data:", error);
       setSessionData([]);

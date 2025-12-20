@@ -18,6 +18,7 @@ import {
   IconSettings,
   IconUsers,
   IconBell,
+  IconFlask,
 } from "@tabler/icons-react";
 
 import { NavDocuments } from "@/components/nav-documents";
@@ -50,6 +51,11 @@ const data = {
       title: "Notifications",
       url: "/dashboard/notifications",
       icon: <IconBell className="w-5 h-5" />,
+    },
+    {
+      title: "AI Test",
+      url: "/dashboard/ai-test",
+      icon: <IconFlask className="w-5 h-5" />,
     },
     {
       title: "Mind Jar",

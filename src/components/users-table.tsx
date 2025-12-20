@@ -81,6 +81,7 @@ export const countrySummarySchema = z.object({
 
 export const userDetailSchema = z.object({
   userId: z.string(),
+  userName: z.string().optional(),
   country: z.string(),
   sessionCount: z.number(),
   lastSession: z.string().nullable(),
@@ -146,7 +147,13 @@ function formatDuration(seconds: number): string {
   }
 }
 
-const CopyableTooltip = ({ text }: { text: string }) => {
+const CopyableTooltip = ({
+  text,
+  children,
+}: {
+  text: string;
+  children?: React.ReactNode;
+}) => {
   const [copied, setCopied] = React.useState(false);
 
   const handleCopy = async () => {
@@ -160,7 +167,7 @@ const CopyableTooltip = ({ text }: { text: string }) => {
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <div className="cursor-help overflow-hidden text-ellipsis whitespace-nowrap">
-            {text}
+            {children || text}
           </div>
         </TooltipTrigger>
         <TooltipContent
@@ -256,11 +263,16 @@ const userDetailColumns: ColumnDef<z.infer<typeof userDetailSchema>>[] = [
     header: ({ column }) => (
       <SortableHeader column={column}>User ID</SortableHeader>
     ),
-    cell: ({ row }) => (
-      <div className="w-32">
-        <CopyableTooltip text={row.original.userId} />
-      </div>
-    ),
+    cell: ({ row }) => {
+      const displayName = row.original.userName || row.original.userId;
+      return (
+        <div className="w-32">
+          <CopyableTooltip text={row.original.userId}>
+            {displayName}
+          </CopyableTooltip>
+        </div>
+      );
+    },
   },
   {
     accessorKey: "country",

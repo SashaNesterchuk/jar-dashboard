@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getOrAssignName } from "@/lib/user-names";
 
 const POSTHOG_HOST = process.env.POSTHOG_HOST;
 const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
@@ -335,8 +336,12 @@ export async function GET(request: NextRequest) {
       const selfDiscoveryCount =
         typeof row[8] === "number" ? row[8] : Number(row[8]) || 0;
 
+      // Присваиваем имя пользователю если у него больше одной сессии
+      const userName = getOrAssignName(userId, sessionCount);
+
       return {
         userId,
+        userName: userName !== userId ? userName : undefined,
         country,
         sessionCount,
         lastSession,
