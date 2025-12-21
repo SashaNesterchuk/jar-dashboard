@@ -142,8 +142,14 @@ export async function GET(request: NextRequest) {
     const timeWindow = getTimeWindow(timeRange);
     const startIso = timeWindow.start.toISOString();
     const endIso = timeWindow.end.toISOString();
+    
+    // Debug: log time window
+    console.log(`[Sessions API] timeRange=${timeRange}, start=${startIso}, end=${endIso}`);
 
     // Build query to get all practice events
+    // Set limit based on timeRange to get sufficient data
+    const limit = timeRange === "90d" ? 5000 : timeRange === "30d" ? 2000 : 1000;
+    
     const sessionsQuery = `
       SELECT 
         concat(toString(timestamp), '_', JSONExtractString(properties,'event_id'), '_', distinct_id) as session_id,
@@ -164,9 +170,13 @@ export async function GET(request: NextRequest) {
         AND JSONExtractString(properties,'event_id') IS NOT NULL
         AND JSONExtractString(properties,'event_id') != ''
       ORDER BY timestamp DESC
+      LIMIT ${limit}
     `;
 
     const results = await queryPostHogArray(sessionsQuery);
+    
+    // Debug: log results count
+    console.log(`[Sessions API] Found ${results.length} raw events from PostHog`);
 
     // Process results - group by user + practice + time window to create sessions
     const sessionMap = new Map<string, SessionEvent>();
@@ -261,6 +271,12 @@ export async function GET(request: NextRequest) {
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
+    
+    // Debug: log sessions summary
+    console.log(`[Sessions API] Returning ${sessions.length} unique sessions`);
+    if (sessions.length > 0) {
+      console.log(`[Sessions API] Date range in results: ${sessions[sessions.length - 1].timestamp} to ${sessions[0].timestamp}`);
+    }
 
     return NextResponse.json(sessions);
   } catch (error) {
