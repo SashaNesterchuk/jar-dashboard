@@ -94,6 +94,8 @@ export const schema = z.object({
   type: z.string(), // practice type if available
   started: z.number(), // count of started
   finished: z.number(), // completions count
+  plan_id: z.string().nullable().optional(), // plan_id if from planner
+  planned: z.boolean(), // true if plan_id exists
 });
 
 export const trialSchema = z.object({
@@ -336,6 +338,21 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
     header: "Finished",
     cell: ({ row }) => <div className="w-32">{row.original.finished}</div>,
   },
+  {
+    accessorKey: "planned",
+    header: ({ column }) => (
+      <SortableHeader column={column}>Planned</SortableHeader>
+    ),
+    cell: ({ row }) => (
+      <div className="w-24">
+        {row.original.planned ? (
+          <span className="text-green-600">✓ Yes</span>
+        ) : (
+          <span className="text-muted-foreground">✗ No</span>
+        )}
+      </div>
+    ),
+  },
 ];
 
 const sessionColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
@@ -539,9 +556,12 @@ export function PracticeTable({}: {}) {
           started: number;
           practice_name?: string | null;
           practice_type?: string | null;
+          plan_id?: string | null;
         }) => {
           const title =
             (item.practice_name && item.practice_name.trim()) || item.event_id;
+          const planId = item.plan_id?.trim() || null;
+          const planned = !!planId;
 
           return {
             id: item.event_id,
@@ -549,6 +569,8 @@ export function PracticeTable({}: {}) {
             type: formatPracticeType(item.practice_type),
             started: item.started,
             finished: item.completions,
+            plan_id: planId,
+            planned,
           };
         }
       );

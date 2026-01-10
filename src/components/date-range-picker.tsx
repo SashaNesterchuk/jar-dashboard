@@ -18,7 +18,7 @@ interface DateRangePickerProps {
   onDateRangeChange: (startDate: Date, endDate: Date) => void;
 }
 
-type PresetValue = "today" | "yesterday" | "2days" | "custom";
+type PresetValue = "today" | "yesterday" | "2days" | "alltime" | "custom";
 
 export function DateRangePicker({
   startDate,
@@ -65,6 +65,13 @@ export function DateRangePicker({
         const twoDaysAgo = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000);
         setDayRange(twoDaysAgo);
         break;
+      case "alltime":
+        const allTimeStart = new Date("2024-01-01T00:00:00Z");
+        allTimeStart.setHours(0, 0, 0, 0);
+        const allTimeEnd = new Date();
+        allTimeEnd.setHours(23, 59, 59, 999);
+        onDateRangeChange(allTimeStart, allTimeEnd);
+        break;
       case "custom":
         // Don't change date for custom
         break;
@@ -109,10 +116,19 @@ export function DateRangePicker({
     const end = new Date(endDate);
     end.setHours(0, 0, 0, 0);
     
+    // Check if it's all time range
+    const allTimeStart = new Date("2024-01-01T00:00:00Z");
+    allTimeStart.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (start.getTime() === allTimeStart.getTime() && 
+        Math.abs(end.getTime() - today.getTime()) < 24 * 60 * 60 * 1000) {
+      return "All Time";
+    }
+    
     // Check if it's a single day or range
     if (start.getTime() === end.getTime()) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
       const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
       
       if (start.getTime() === today.getTime()) {
@@ -162,6 +178,7 @@ export function DateRangePicker({
               <SelectItem value="today">Today</SelectItem>
               <SelectItem value="yesterday">Yesterday</SelectItem>
               <SelectItem value="2days">2 days ago</SelectItem>
+              <SelectItem value="alltime">All Time</SelectItem>
               <SelectItem value="custom">Custom period</SelectItem>
             </SelectContent>
           </Select>
@@ -206,7 +223,7 @@ export function DateRangePicker({
             size="icon"
             onClick={handlePreviousDay}
             className="h-8 w-8 shrink-0"
-            disabled={preset === "custom"}
+            disabled={preset === "custom" || preset === "alltime"}
           >
             <IconChevronLeft className="h-4 w-4" />
             <span className="sr-only">Previous day</span>
@@ -234,7 +251,7 @@ export function DateRangePicker({
             variant="outline"
             size="icon"
             onClick={handleNextDay}
-            disabled={isToday() || preset === "custom"}
+            disabled={isToday() || preset === "custom" || preset === "alltime"}
             className="h-8 w-8 shrink-0"
           >
             <IconChevronRight className="h-4 w-4" />

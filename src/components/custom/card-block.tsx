@@ -34,10 +34,13 @@ export function CardBlock({
       ? Math.abs((value as number) - previous)
       : null;
 
-  // Determine card color based on delta
-  const cardClassName = isPositive
-    ? "@container/card border-green-500/50 bg-green-500/5"
-    : "@container/card border-red-500/50 bg-red-500/5";
+  // Determine card color based on delta - only apply color if there's a change/delta
+  const hasChangeData = delta !== undefined || change !== undefined;
+  const cardClassName = hasChangeData
+    ? isPositive
+      ? "@container/card border-green-500/50 bg-green-500/5"
+      : "@container/card border-red-500/50 bg-red-500/5"
+    : "@container/card";
 
   return (
     <Card className={cardClassName}>

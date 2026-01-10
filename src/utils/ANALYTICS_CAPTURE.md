@@ -1,7 +1,7 @@
 # Analytics Capture Events Documentation
 
-**Last Updated**: 2025-01-XX  
-**Version**: 1.0.0
+**Last Updated**: 2025-12-27  
+**Version**: 2.7.0
 
 ## Overview
 
@@ -160,6 +160,128 @@ This document provides a comprehensive catalog of all analytics capture events u
 - `completion_percentage`: Процент завершения (0-79% для покинутых)
 - `duration_seconds`: Длительность в секундах
 - `plan_id`: ID элемента плана
+- `last_question_number`: Номер последнего просмотренного вопроса (только для квизов)
+- `questions_answered_count`: Количество отвеченных вопросов (только для квизов)
+- `total_questions`: Общее количество вопросов (только для квизов)
+
+### `practice_session_begin`
+
+**Описание**: Пользователь нажал кнопку "Start" для начала практики (переход от интро к самой практике)
+
+**Свойства**:
+
+- `event_id`: ID события практики (REQUIRED)
+- `practice_type`: Тип практики ("meditation" | "breathing")
+- `practice_name`: Название практики (REQUIRED)
+- `plan_id`: ID элемента плана (если из плана)
+- `chosen_time`: Выбранная длительность в секундах
+- `has_preset_duration`: Была ли длительность предустановлена (true/false)
+
+### `practice_page_transition`
+
+**Описание**: Пользователь перешел между страницами в процессе практики
+
+**Свойства**:
+
+- `event_id`: ID события практики (REQUIRED)
+- `practice_type`: Тип практики ("meditation" | "breathing")
+- `practice_name`: Название практики (REQUIRED)
+- `plan_id`: ID элемента плана
+- `from_position`: Номер страницы, с которой перешли (0-based)
+- `to_position`: Номер страницы, на которую перешли (0-based)
+- `from_page_name`: Название страницы, с которой перешли ("begin_session" | "practice_view" | "final_event")
+- `to_page_name`: Название страницы, на которую перешли ("begin_session" | "practice_view" | "final_event")
+- `duration_at_page_seconds`: Время, проведенное на предыдущей странице в секундах
+
+### `practice_finish_early`
+
+**Описание**: Пользователь нажал "Finish Early" в меню практики для досрочного завершения
+
+**Свойства**:
+
+- `event_id`: ID события практики (REQUIRED)
+- `practice_type`: Тип практики ("meditation" | "breathing")
+- `practice_name`: Название практики (REQUIRED)
+- `plan_id`: ID элемента плана
+- `current_position`: Текущая позиция в практике (0-based)
+- `duration_seconds`: Общая длительность сессии в секундах
+
+### `practice_start_over`
+
+**Описание**: Пользователь нажал "Start Over" в меню практики для перезапуска
+
+**Свойства**:
+
+- `event_id`: ID события практики (REQUIRED)
+- `practice_type`: Тип практики ("meditation" | "breathing")
+- `practice_name`: Название практики (REQUIRED)
+- `plan_id`: ID элемента плана
+- `current_position`: Текущая позиция в практике (0-based)
+- `duration_seconds`: Время до рестарта в секундах
+
+### `practice_mood_changed`
+
+**Описание**: Пользователь изменил настроение во время практики
+
+**Свойства**:
+
+- `event_id`: ID события практики (REQUIRED)
+- `practice_type`: Тип практики ("meditation" | "breathing")
+- `practice_name`: Название практики (REQUIRED)
+- `plan_id`: ID элемента плана
+- `mood`: Выбранное настроение
+- `position`: Позиция в практике, где было изменено настроение (0-based)
+
+---
+
+## Question/Quiz Tracking
+
+### `question_viewed`
+
+**Описание**: Пользователь просмотрел вопрос в квизе
+
+**Свойства**:
+
+- `event_id`: ID события квиза (REQUIRED)
+- `practice_type`: Тип практики (всегда "question")
+- `practice_name`: Название квиза (REQUIRED)
+- `finished_event_id`: ID завершенного события
+- `question_number`: Номер вопроса (1-based)
+- `question_description`: Текст вопроса
+- `total_questions`: Общее количество вопросов в квизе
+- `has_previous_answer`: Был ли уже ответ на этот вопрос (true/false)
+
+### `question_answered`
+
+**Описание**: Пользователь выбрал ответ на вопрос (без сохранения самого ответа)
+
+**Свойства**:
+
+- `event_id`: ID события квиза (REQUIRED)
+- `practice_type`: Тип практики (всегда "question")
+- `practice_name`: Название квиза (REQUIRED)
+- `finished_event_id`: ID завершенного события
+- `question_number`: Номер вопроса (1-based)
+- `time_to_answer_seconds`: Время от просмотра до ответа в секундах
+- `is_answer_changed`: Изменение существующего ответа (true/false)
+- `answer_change_count`: Количество изменений ответа на этот вопрос
+
+### `question_navigation`
+
+**Описание**: Пользователь перешел между вопросами
+
+**Свойства**:
+
+- `event_id`: ID события квиза (REQUIRED)
+- `practice_type`: Тип практики (всегда "question")
+- `practice_name`: Название квиза (REQUIRED)
+- `finished_event_id`: ID завершенного события
+- `from_question`: Номер вопроса, с которого перешли
+- `to_question`: Номер вопроса, на который перешли
+- `direction`: Направление навигации ("forward" | "back")
+- `was_answered`: Был ли ответ на вопросе, с которого перешли (true/false)
+
+---
 
 ### `practice_type_selected`
 
@@ -1005,6 +1127,257 @@ This document provides a comprehensive catalog of all analytics capture events u
 - `prompt_index`: Индекс промпта (начиная с 1)
 - `total_prompts`: Общее количество промптов
 - `category_id`: ID категории
+
+---
+
+## Journal Editor Flow
+
+### `journal_editor_opened`
+
+**Описание**: Редактор дневника открыт
+
+**Свойства**:
+
+- `editor_mode`: Режим редактора ("empty" | "templates" | "add-template" | "result" | "review")
+- `event_id`: ID события дневника
+- `event_title`: Название события дневника
+- `has_templates`: Есть ли несколько тем (true/false)
+- `template_count`: Количество тем (если multi-theme)
+- `practice_name`: Название практики (REQUIRED)
+
+### `journal_template_regenerated`
+
+**Описание**: Пользователь сгенерировал новую тему дневника
+
+**Свойства**:
+
+- `event_id`: ID текущего события
+- `event_title`: Название текущего события
+- `practice_name`: Название практики (REQUIRED)
+- `had_content`: Был ли написан текст (true/false)
+- `new_event_id`: ID нового события после генерации
+- `new_event_title`: Новое название темы
+
+### `journal_favorite_toggled`
+
+**Описание**: Пользователь добавил/удалил дневниковую тему в избранное
+
+**Свойства**:
+
+- `event_id`: ID события дневника
+- `event_title`: Название темы
+- `practice_name`: Название практики (REQUIRED)
+- `is_favorite`: Новый статус избранного (true/false)
+- `action`: Действие ("added" | "removed")
+
+### `journal_disliked`
+
+**Описание**: Пользователь отметил тему как "не спрашивать"
+
+**Свойства**:
+
+- `event_id`: ID события дневника
+- `event_title`: Название темы
+- `practice_name`: Название практики (REQUIRED)
+- `had_content`: Был ли написан текст (true/false)
+
+### `journal_deleted`
+
+**Описание**: Пользователь удалил содержимое дневника
+
+**Свойства**:
+
+- `event_id`: ID события дневника
+- `event_title`: Название темы (если не пустой)
+- `practice_name`: Название практики (REQUIRED)
+- `had_content`: Был ли текст до удаления (true/false)
+
+### `journal_dropdown_action`
+
+**Описание**: Пользователь выбрал действие из выпадающего меню редактора
+
+**Свойства**:
+
+- `action`: Действие ("suggest_theme" | "add_template" | "summary" | "discuss")
+- `from_mode`: Текущий режим редактора
+- `had_content`: Был ли написан текст (true/false)
+
+### `journal_multitheme_navigation`
+
+**Описание**: Пользователь переключился между вопросами в multi-theme режиме
+
+**Свойства**:
+
+- `action`: Действие ("next" | "prev")
+- `from_index`: Текущий индекс вопроса
+- `to_index`: Целевой индекс вопроса
+- `total_themes`: Общее количество тем
+- `current_theme`: Текущая тема (label)
+- `practice_name`: Название практики (REQUIRED)
+
+### `journal_multitheme_removed`
+
+**Описание**: Пользователь удалил тему из multi-theme режима
+
+**Свойства**:
+
+- `removed_theme`: Удаленная тема (label)
+- `remaining_themes`: Оставшееся количество тем
+- `practice_name`: Название практики (REQUIRED)
+
+### `journal_mood_selected`
+
+**Описание**: Пользователь выбрал настроение в редакторе дневника
+
+**Свойства**:
+
+- `mood`: Выбранное настроение
+- `ball`: Выбранный тип шарика
+- `practice_name`: Название практики (REQUIRED)
+
+### `journal_text_input_started`
+
+**Описание**: Пользователь начал вводить текст в редакторе
+
+**Свойства**:
+
+- `editor_mode`: Текущий режим редактора
+- `question_index`: Индекс вопроса (для multi-theme, null иначе)
+- `practice_name`: Название практики (REQUIRED)
+
+### `journal_text_input_progress`
+
+**Описание**: Пользователь достиг milestone по количеству символов
+
+**Свойства**:
+
+- `character_count`: Текущее количество символов
+- `milestone`: Достигнутый milestone (50, 100, 250, 500, 1000)
+- `editor_mode`: Текущий режим редактора
+- `question_index`: Индекс вопроса (для multi-theme, null иначе)
+- `practice_name`: Название практики (REQUIRED)
+
+### `journal_save_modal_shown`
+
+**Описание**: Показано модальное окно сохранения изменений
+
+**Свойства**:
+
+- `trigger_action`: Действие, которое вызвало модальное окно
+- `had_content`: Был ли написан текст (true/false)
+- `practice_name`: Название практики (REQUIRED)
+
+### `journal_save_modal_action`
+
+**Описание**: Пользователь принял решение в модальном окне сохранения
+
+**Свойства**:
+
+- `action`: Действие ("save" | "cancel")
+- `trigger_action`: Действие, которое вызвало модальное окно
+- `practice_name`: Название практики (REQUIRED)
+
+### `journal_templates_screen_viewed`
+
+**Описание**: Экран выбора шаблонов дневника открыт
+
+**Свойства**:
+
+- `available_templates`: Количество доступных категорий шаблонов
+- `entry_point`: Как пользователь попал на экран
+
+### `journal_template_category_pressed`
+
+**Описание**: Пользователь нажал на категорию шаблона
+
+**Свойства**:
+
+- `template_id`: ID шаблона
+- `template_title`: Название шаблона
+- `is_premium`: Требуется ли премиум (true/false)
+- `available_questions`: Количество вопросов в шаблоне
+
+### `journal_template_modal_viewed`
+
+**Описание**: Модальное окно с вопросами шаблона открыто
+
+**Свойства**:
+
+- `template_id`: ID шаблона
+- `template_title`: Название шаблона
+- `questions_count`: Количество показанных вопросов
+
+### `journal_template_selected`
+
+**Описание**: Пользователь выбрал шаблон для дневника
+
+**Свойства**:
+
+- `template_id`: ID выбранного шаблона
+- `template_title`: Название шаблона
+- `questions_count`: Количество вопросов
+- `practice_name`: Название шаблона (REQUIRED)
+
+### `journal_templates_back_pressed`
+
+**Описание**: Пользователь нажал кнопку назад на экране шаблонов
+
+**Свойства**:
+
+- `browsed_templates`: Количество просмотренных шаблонов
+
+### `journal_categories_screen_viewed`
+
+**Описание**: Экран категорий дневника открыт
+
+**Свойства**:
+
+- `categories_count`: Количество категорий
+- `entry_point`: Как пользователь попал на экран
+
+### `journal_category_selected`
+
+**Описание**: Пользователь выбрал категорию дневника
+
+**Свойства**:
+
+- `category_id`: ID выбранной категории
+- `category_title`: Название категории
+- `from_category_id`: ID предыдущей категории
+- `prompts_count`: Количество промптов в категории
+
+### `journal_prompt_pressed`
+
+**Описание**: Пользователь нажал на промпт дневника
+
+**Свойства**:
+
+- `event_id`: ID промпта
+- `event_title`: Название промпта
+- `category_id`: ID категории
+- `category_title`: Название категории
+- `is_premium`: Требуется ли премиум (true/false)
+- `practice_name`: Название промпта (REQUIRED)
+
+### `journal_prompt_premium_blocked`
+
+**Описание**: Премиум промпт показан с блюром (заблокирован)
+
+**Свойства**:
+
+- `event_id`: ID заблокированного промпта
+- `event_title`: Название промпта
+- `category_id`: ID категории
+- `unlock_button_shown`: Показана ли кнопка разблокировки (true/false)
+
+### `journal_categories_back_pressed`
+
+**Описание**: Пользователь нажал кнопку назад на экране категорий
+
+**Свойства**:
+
+- `categories_browsed`: Количество просмотренных категорий
+- `prompts_viewed`: Количество просмотренных промптов
 
 ---
 

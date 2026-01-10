@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { UserEventsTimeline } from "@/components/user-events-timeline";
 import { AIReviewSection } from "@/components/ai-review-section";
+import { UserSummaryChips } from "@/components/user-summary-chips";
+import { UserPracticesTable } from "@/components/user-practices-table";
+import { UserCheckinsTable } from "@/components/user-checkins-table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -43,6 +47,8 @@ export default function UserEventsPage({
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState("practices");
+  const [userName, setUserName] = React.useState<string | null>(null);
 
   // AI Review state
   const [aiAnalysis, setAiAnalysis] = React.useState<any>(null);
@@ -98,10 +104,12 @@ export default function UserEventsPage({
     [userId]
   );
 
-  // Fetch events on mount and when date range changes
+  // Fetch events only when on "all-events" tab
   React.useEffect(() => {
-    fetchEvents(dateRange.start, dateRange.end);
-  }, [fetchEvents, dateRange]);
+    if (activeTab === "all-events") {
+      fetchEvents(dateRange.start, dateRange.end);
+    }
+  }, [fetchEvents, dateRange, activeTab]);
 
   // Handle date range change
   const handleDateRangeChange = (start: Date, end: Date) => {
@@ -167,7 +175,9 @@ export default function UserEventsPage({
           </Button>
 
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <h1 className="text-xl font-semibold truncate">User Events</h1>
+            <h1 className="text-xl font-semibold truncate">
+              {userName || userId}
+            </h1>
             <TooltipProvider>
               <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
@@ -175,7 +185,7 @@ export default function UserEventsPage({
                     onClick={handleCopyUserId}
                     className="cursor-pointer rounded-md bg-muted px-3 py-1 font-mono text-sm hover:bg-muted/80 transition-colors truncate max-w-xs"
                   >
-                    {userId}
+                    {userName ? userId : "ID"}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -201,7 +211,10 @@ export default function UserEventsPage({
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6 lg:px-6 lg:py-8">
-        <div className="mx-auto max-w-4xl space-y-6">
+        <div className="mx-auto max-w-6xl space-y-6">
+          {/* Summary Chips */}
+          <UserSummaryChips userId={userId} onUserNameLoad={setUserName} />
+
           {/* Date Range Picker */}
           <DateRangePicker
             startDate={dateRange.start}
@@ -209,58 +222,85 @@ export default function UserEventsPage({
             onDateRangeChange={handleDateRangeChange}
           />
 
-          {/* AI Review Button */}
-          <div className="flex justify-center">
-            <Button
-              onClick={handleAIReview}
-              disabled={isAiLoading || isLoading || events.length === 0}
-              size="lg"
-              className="gap-2"
-            >
-              <IconBrain className="h-5 w-5" />
-              {isAiLoading ? "Генерується AI аналіз..." : "AI Review"}
-            </Button>
-          </div>
+          {/* Tabs Section */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="practices">Practices</TabsTrigger>
+              <TabsTrigger value="checkins">Check-ins</TabsTrigger>
+              <TabsTrigger value="all-events">All Events</TabsTrigger>
+            </TabsList>
 
-          {/* AI Review Section */}
-          {showAiReview && (
-            <AIReviewSection
-              analysis={aiAnalysis}
-              isLoading={isAiLoading}
-              error={aiError}
-              totalEvents={events.length}
-            />
-          )}
+            <TabsContent value="practices" className="space-y-4">
+              <UserPracticesTable 
+                userId={userId} 
+                startDate={dateRange.start} 
+                endDate={dateRange.end} 
+              />
+            </TabsContent>
 
-          {/* Error State */}
-          {error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-              <p className="text-sm font-medium text-destructive">
-                Error loading events: {error}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fetchEvents(dateRange.start, dateRange.end)}
-                className="mt-2"
-              >
-                Retry
-              </Button>
-            </div>
-          )}
+            <TabsContent value="checkins" className="space-y-4">
+              <UserCheckinsTable 
+                userId={userId} 
+                startDate={dateRange.start} 
+                endDate={dateRange.end} 
+              />
+            </TabsContent>
 
-          {/* Loading State */}
-          {isLoading && (
-            <div className="flex items-center justify-center gap-2 py-12">
-              <IconLoader className="h-6 w-6 animate-spin text-muted-foreground" />
-              <span className="text-muted-foreground">Loading events...</span>
-            </div>
-          )}
+            <TabsContent value="all-events" className="space-y-4">
+              {/* AI Review Button */}
+              <div className="flex justify-center">
+                <Button
+                  onClick={handleAIReview}
+                  disabled={isAiLoading || isLoading || events.length === 0}
+                  size="lg"
+                  className="gap-2"
+                >
+                  <IconBrain className="h-5 w-5" />
+                  {isAiLoading ? "Генерується AI аналіз..." : "AI Review"}
+                </Button>
+              </div>
 
-          {/* Timeline */}
-          {!isLoading && !error && (
-            <UserEventsTimeline events={events} isLoading={isLoading} />
-          )}
+              {/* AI Review Section */}
+              {showAiReview && (
+                <AIReviewSection
+                  analysis={aiAnalysis}
+                  isLoading={isAiLoading}
+                  error={aiError}
+                  totalEvents={events.length}
+                />
+              )}
+
+              {/* Error State */}
+              {error && (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                  <p className="text-sm font-medium text-destructive">
+                    Error loading events: {error}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchEvents(dateRange.start, dateRange.end)}
+                    className="mt-2"
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {isLoading && (
+                <div className="flex items-center justify-center gap-2 py-12">
+                  <IconLoader className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="text-muted-foreground">Loading events...</span>
+                </div>
+              )}
+
+              {/* Timeline */}
+              {!isLoading && !error && (
+                <UserEventsTimeline events={events} isLoading={isLoading} />
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>

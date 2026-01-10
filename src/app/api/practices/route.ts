@@ -266,6 +266,7 @@ export async function GET(request: NextRequest) {
         JSONExtractString(properties,'event_id') as event_id,
         any(JSONExtractString(properties,'practice_name')) as practice_name,
         any(JSONExtractString(properties,'practice_type')) as practice_type,
+        any(JSONExtractString(properties,'plan_id')) as plan_id,
         count() as completions
       FROM events 
       WHERE event = 'practice_completed' 
@@ -281,6 +282,7 @@ export async function GET(request: NextRequest) {
     const startedQuery = `
       SELECT 
         JSONExtractString(properties,'event_id') as event_id,
+        any(JSONExtractString(properties,'plan_id')) as plan_id,
         count() as started
       FROM events 
       WHERE event = 'practice_started'
@@ -302,6 +304,7 @@ export async function GET(request: NextRequest) {
         {
           practice_name: string;
           practice_type: string;
+          plan_id: string | null;
           completions: number;
         }
       >
@@ -312,29 +315,40 @@ export async function GET(request: NextRequest) {
       }
       const practiceName = String(row[1] || "") || eventId;
       const practiceType = String(row[2] || "") || "practice";
+      const planId = String(row[3] || "").trim() || null;
       const completions =
-        typeof row[3] === "number" ? row[3] : Number(row[3]) || 0;
+        typeof row[4] === "number" ? row[4] : Number(row[4]) || 0;
       acc.set(eventId, {
         practice_name: practiceName,
         practice_type: practiceType,
+        plan_id: planId,
         completions,
       });
       return acc;
     }, new Map());
 
-    const startedMap = startedResultsRaw.reduce<Map<string, number>>(
-      (acc, row) => {
-        const eventId = String(row[0] || "");
-        if (!eventId) {
-          return acc;
+    const startedMap = startedResultsRaw.reduce<
+      Map<
+        string,
+        {
+          started: number;
+          plan_id: string | null;
         }
-        const started =
-          typeof row[1] === "number" ? row[1] : Number(row[1]) || 0;
-        acc.set(eventId, started);
+      >
+    >((acc, row) => {
+      const eventId = String(row[0] || "");
+      if (!eventId) {
         return acc;
-      },
-      new Map()
-    );
+      }
+      const planId = String(row[1] || "").trim() || null;
+      const started =
+        typeof row[2] === "number" ? row[2] : Number(row[2]) || 0;
+      acc.set(eventId, {
+        started,
+        plan_id: planId,
+      });
+      return acc;
+    }, new Map());
 
     // Get all unique event_ids (from both started and completed)
     const allEventIds = new Set([...completedMap.keys(), ...startedMap.keys()]);
@@ -343,12 +357,19 @@ export async function GET(request: NextRequest) {
     const practices = Array.from(allEventIds)
       .map((eventId) => {
         const completedEntry = completedMap.get(eventId);
+        const startedEntry = startedMap.get(eventId);
+        // plan_id can come from either completed or started events
+        const planId =
+          completedEntry?.plan_id ||
+          startedEntry?.plan_id ||
+          null;
         return {
           event_id: eventId,
           practice_name: completedEntry?.practice_name || eventId,
           practice_type: completedEntry?.practice_type || "practice",
+          plan_id: planId,
           completions: completedEntry?.completions || 0,
-          started: startedMap.get(eventId) || 0,
+          started: startedEntry?.started || 0,
         };
       })
       .sort((a, b) => b.completions - a.completions); // Sort by completions DESC
