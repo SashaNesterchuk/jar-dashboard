@@ -19,6 +19,7 @@ import {
   IconUsers,
   IconBell,
   IconFlask,
+  IconCalendar,
 } from "@tabler/icons-react";
 
 import { NavDocuments } from "@/components/nav-documents";
@@ -46,6 +47,11 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: <IconDashboard className="w-5 h-5" />,
+    },
+    {
+      title: "NY Event",
+      url: "/dashboard/ny",
+      icon: <IconCalendar className="w-5 h-5" />,
     },
     {
       title: "Notifications",
