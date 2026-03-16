@@ -77,6 +77,7 @@ import { ToggleGroup, ToggleGroupItem } from "@radix-ui/react-toggle-group";
 export const countrySummarySchema = z.object({
   country: z.string(),
   userCount: z.number(),
+  activeUserCount: z.number(),
 });
 
 export const citySummarySchema = z.object({
@@ -256,6 +257,29 @@ const countrySummaryColumns: ColumnDef<z.infer<typeof countrySummarySchema>>[] =
       cell: ({ row }) => (
         <div className="w-32 font-medium">
           {row.original.userCount.toLocaleString()}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "activeUserCount",
+      header: ({ column }) => (
+        <div className="flex items-center gap-1">
+          <SortableHeader column={column}>Active Users</SortableHeader>
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <span className="cursor-help text-muted-foreground">ⓘ</span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>Users with more than 1 session</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      ),
+      cell: ({ row }) => (
+        <div className="w-32 font-medium">
+          {row.original.activeUserCount.toLocaleString()}
         </div>
       ),
     },

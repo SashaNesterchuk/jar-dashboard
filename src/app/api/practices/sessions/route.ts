@@ -122,6 +122,7 @@ interface SessionEvent {
   event: string;
   completionPercentage: number;
   country: string;
+  isPremium: boolean;
 }
 
 export async function GET(request: NextRequest) {
@@ -142,14 +143,17 @@ export async function GET(request: NextRequest) {
     const timeWindow = getTimeWindow(timeRange);
     const startIso = timeWindow.start.toISOString();
     const endIso = timeWindow.end.toISOString();
-    
+
     // Debug: log time window
-    console.log(`[Sessions API] timeRange=${timeRange}, start=${startIso}, end=${endIso}`);
+    console.log(
+      `[Sessions API] timeRange=${timeRange}, start=${startIso}, end=${endIso}`
+    );
 
     // Build query to get all practice events
     // Set limit based on timeRange to get sufficient data
-    const limit = timeRange === "90d" ? 5000 : timeRange === "30d" ? 2000 : 1000;
-    
+    const limit =
+      timeRange === "90d" ? 5000 : timeRange === "30d" ? 2000 : 1000;
+
     const sessionsQuery = `
       SELECT 
         concat(toString(timestamp), '_', JSONExtractString(properties,'event_id'), '_', distinct_id) as session_id,
@@ -160,7 +164,8 @@ export async function GET(request: NextRequest) {
         timestamp,
         event,
         toInt(coalesce(JSONExtractString(properties,'completion_percentage'), '0')) as completion_percentage,
-        coalesce(JSONExtractString(properties,'$geoip_country_code'), 'Unknown') as country
+        coalesce(JSONExtractString(properties,'$geoip_country_code'), 'Unknown') as country,
+        JSONExtractBool(properties,'is_premium') as is_premium
       FROM events
       WHERE event IN ('practice_started', 'practice_completed', 'mood_check_in_completed')
         AND timestamp >= toDateTime('${startIso}','Europe/Warsaw')
@@ -174,9 +179,11 @@ export async function GET(request: NextRequest) {
     `;
 
     const results = await queryPostHogArray(sessionsQuery);
-    
+
     // Debug: log results count
-    console.log(`[Sessions API] Found ${results.length} raw events from PostHog`);
+    console.log(
+      `[Sessions API] Found ${results.length} raw events from PostHog`
+    );
 
     // Process results - group by user + practice + time window to create sessions
     const sessionMap = new Map<string, SessionEvent>();
@@ -196,6 +203,8 @@ export async function GET(request: NextRequest) {
       const completionPercentage =
         typeof row[7] === "number" ? row[7] : Number(row[7]) || 0;
       const country = String(row[8] || "Unknown");
+      // @ts-ignore
+      const isPremium = row[9] === 1 || row[9] === true || row[9] === "true";
 
       if (!sessionId || !practiceId || !userId || !timestamp) {
         continue;
@@ -243,6 +252,7 @@ export async function GET(request: NextRequest) {
           event,
           completionPercentage,
           country,
+          isPremium,
         });
       }
     }
@@ -263,6 +273,7 @@ export async function GET(request: NextRequest) {
         timestamp: session.timestamp,
         completed,
         country: session.country,
+        isPremium: session.isPremium,
       };
     });
 
@@ -271,11 +282,15 @@ export async function GET(request: NextRequest) {
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
-    
+
     // Debug: log sessions summary
     console.log(`[Sessions API] Returning ${sessions.length} unique sessions`);
     if (sessions.length > 0) {
-      console.log(`[Sessions API] Date range in results: ${sessions[sessions.length - 1].timestamp} to ${sessions[0].timestamp}`);
+      console.log(
+        `[Sessions API] Date range in results: ${
+          sessions[sessions.length - 1].timestamp
+        } to ${sessions[0].timestamp}`
+      );
     }
 
     return NextResponse.json(sessions);

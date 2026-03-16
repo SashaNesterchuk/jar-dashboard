@@ -17,6 +17,8 @@ interface CardBlockProps {
   period: string;
   delta?: number;
   previous?: number;
+  total?: number;
+  newUsers?: number;
 }
 export function CardBlock({
   title,
@@ -25,6 +27,8 @@ export function CardBlock({
   period,
   delta,
   previous,
+  total,
+  newUsers,
 }: CardBlockProps) {
   const isPositive = delta !== undefined ? delta >= 0 : change?.startsWith("+");
 
@@ -72,6 +76,19 @@ export function CardBlock({
       </CardHeader>
       <CardFooter className="flex-col items-start gap-1.5 text-sm">
         <div className="line-clamp-1 flex gap-2 font-medium">{period}</div>
+        {(total !== undefined || newUsers !== undefined) && (
+          <div className="line-clamp-1 flex gap-2 text-muted-foreground">
+            {total !== undefined && (
+              <span>Total: {total.toLocaleString()} users</span>
+            )}
+            {total !== undefined && newUsers !== undefined && (
+              <span>•</span>
+            )}
+            {newUsers !== undefined && (
+              <span>New: {newUsers.toLocaleString()} users</span>
+            )}
+          </div>
+        )}
       </CardFooter>
     </Card>
   );

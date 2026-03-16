@@ -97,6 +97,22 @@ function buildQuery(
   return `SELECT uniqExact(JSONExtractString(properties,'user_id')) AS value FROM events WHERE timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND JSONExtractString(properties,'user_id') IS NOT NULL AND JSONExtractString(properties,'user_id') != ''`;
 }
 
+function buildTotalUsersQuery(
+  startIso: string,
+  endIso: string,
+  environment: string = "production"
+): string {
+  return `SELECT uniqExact(JSONExtractString(properties,'user_id')) AS value FROM events WHERE timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND JSONExtractString(properties,'user_id') IS NOT NULL AND JSONExtractString(properties,'user_id') != ''`;
+}
+
+function buildNewUsersQuery(
+  startIso: string,
+  endIso: string,
+  environment: string = "production"
+): string {
+  return `SELECT uniqExact(user_id) AS value FROM (SELECT JSONExtractString(properties,'user_id') AS user_id, min(timestamp) AS first_seen FROM events WHERE JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND JSONExtractString(properties,'user_id') IS NOT NULL AND JSONExtractString(properties,'user_id') != '' GROUP BY user_id HAVING first_seen >= toDateTime('${startIso}','Europe/Warsaw') AND first_seen < toDateTime('${endIso}','Europe/Warsaw'))`;
+}
+
 export async function GET() {
   try {
     const environment = "production";
@@ -114,6 +130,16 @@ export async function GET() {
       yesterday.end.toISOString(),
       environment
     );
+    const dauTotalQuery = buildTotalUsersQuery(
+      today.start.toISOString(),
+      today.end.toISOString(),
+      environment
+    );
+    const dauNewQuery = buildNewUsersQuery(
+      today.start.toISOString(),
+      today.end.toISOString(),
+      environment
+    );
 
     // WAU: Last 7 days vs Previous 7 days
     const lastWeek = weekWindow(0);
@@ -126,6 +152,16 @@ export async function GET() {
     const wauComparisonQuery = buildQuery(
       prevWeek.start.toISOString(),
       prevWeek.end.toISOString(),
+      environment
+    );
+    const wauTotalQuery = buildTotalUsersQuery(
+      lastWeek.start.toISOString(),
+      lastWeek.end.toISOString(),
+      environment
+    );
+    const wauNewQuery = buildNewUsersQuery(
+      lastWeek.start.toISOString(),
+      lastWeek.end.toISOString(),
       environment
     );
 
@@ -142,17 +178,45 @@ export async function GET() {
       prevMonth.end.toISOString(),
       environment
     );
+    const mauTotalQuery = buildTotalUsersQuery(
+      lastMonth.start.toISOString(),
+      lastMonth.end.toISOString(),
+      environment
+    );
+    const mauNewQuery = buildNewUsersQuery(
+      lastMonth.start.toISOString(),
+      lastMonth.end.toISOString(),
+      environment
+    );
 
     // Execute all queries in parallel
-    const [dau, dauComparison, wau, wauComparison, mau, mauComparison] =
-      await Promise.all([
-        queryPostHog(dauQuery),
-        queryPostHog(dauComparisonQuery),
-        queryPostHog(wauQuery),
-        queryPostHog(wauComparisonQuery),
-        queryPostHog(mauQuery),
-        queryPostHog(mauComparisonQuery),
-      ]);
+    const [
+      dau,
+      dauComparison,
+      dauTotal,
+      dauNew,
+      wau,
+      wauComparison,
+      wauTotal,
+      wauNew,
+      mau,
+      mauComparison,
+      mauTotal,
+      mauNew,
+    ] = await Promise.all([
+      queryPostHog(dauQuery),
+      queryPostHog(dauComparisonQuery),
+      queryPostHog(dauTotalQuery),
+      queryPostHog(dauNewQuery),
+      queryPostHog(wauQuery),
+      queryPostHog(wauComparisonQuery),
+      queryPostHog(wauTotalQuery),
+      queryPostHog(wauNewQuery),
+      queryPostHog(mauQuery),
+      queryPostHog(mauComparisonQuery),
+      queryPostHog(mauTotalQuery),
+      queryPostHog(mauNewQuery),
+    ]);
 
     // Calculate percentage changes
     function calculateDelta(current: number, previous: number): number {
@@ -170,18 +234,24 @@ export async function GET() {
         previous: dauComparison,
         delta: dauDelta,
         change: `${dauDelta >= 0 ? "+" : ""}${dauDelta.toFixed(1)}%`,
+        total: dauTotal,
+        new: dauNew,
       },
       wau: {
         value: wau,
         previous: wauComparison,
         delta: wauDelta,
         change: `${wauDelta >= 0 ? "+" : ""}${wauDelta.toFixed(1)}%`,
+        total: wauTotal,
+        new: wauNew,
       },
       mau: {
         value: mau,
         previous: mauComparison,
         delta: mauDelta,
         change: `${mauDelta >= 0 ? "+" : ""}${mauDelta.toFixed(1)}%`,
+        total: mauTotal,
+        new: mauNew,
       },
     });
   } catch (error) {

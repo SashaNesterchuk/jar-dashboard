@@ -263,6 +263,46 @@ export async function GET(request: NextRequest) {
       GROUP BY user_id
     `;
 
+    // Active Users by Country Query - users with more than 1 session
+    const activeUsersByCountryQuery = `
+      SELECT 
+        country,
+        count() as active_user_count
+      FROM (
+        SELECT 
+          user_id,
+          any(country) as country,
+          count() as session_count
+        FROM (
+          SELECT 
+            user_id,
+            session_batch,
+            any(country) as country
+          FROM (
+            SELECT 
+              JSONExtractString(properties,'user_id') as user_id,
+              JSONExtractString(properties,'session_id') as session_id,
+              any(JSONExtractString(properties,'country')) as country,
+              intDiv(toUnixTimestamp(min(timestamp)), 300) as session_batch
+            FROM events
+            WHERE ${baseFilters}
+              AND JSONExtractString(properties,'user_id') IS NOT NULL
+              AND JSONExtractString(properties,'user_id') != ''
+              AND JSONExtractString(properties,'session_id') IS NOT NULL
+              AND JSONExtractString(properties,'session_id') != ''
+              AND JSONExtractString(properties,'country') IS NOT NULL
+              AND JSONExtractString(properties,'country') != ''
+            GROUP BY user_id, session_id
+          )
+          GROUP BY user_id, session_batch
+        )
+        GROUP BY user_id
+        HAVING session_count > 1
+      )
+      GROUP BY country
+      ORDER BY active_user_count DESC
+    `;
+
     // Debug query for specific user if requested
     let debugInfo = null;
     if (debugUserId) {
@@ -352,17 +392,30 @@ export async function GET(request: NextRequest) {
       citySummaryResults,
       usersDetailResults,
       sessionDurationResults,
+      activeUsersByCountryResults,
     ] = await Promise.all([
       queryPostHogArray(countrySummaryQuery),
       queryPostHogArray(citySummaryQuery),
       queryPostHogArray(usersDetailQuery),
       queryPostHogArray(sessionDurationQuery),
+      queryPostHogArray(activeUsersByCountryQuery),
     ]);
 
     // Transform country summary results
+    const activeUsersByCountryMap = new Map<string, number>();
+    activeUsersByCountryResults.forEach((row) => {
+      const country = String(row[0] || "");
+      const activeUserCount =
+        typeof row[1] === "number" ? row[1] : Number(row[1]) || 0;
+      if (country) {
+        activeUsersByCountryMap.set(country, activeUserCount);
+      }
+    });
+
     const countrySummary = countrySummaryResults.map((row) => ({
       country: String(row[0] || ""),
       userCount: typeof row[1] === "number" ? row[1] : Number(row[1]) || 0,
+      activeUserCount: activeUsersByCountryMap.get(String(row[0] || "")) || 0,
     }));
 
     // Transform city summary results

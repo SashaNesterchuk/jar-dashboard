@@ -116,6 +116,7 @@ export const sessionSchema = z.object({
   timestamp: z.string(),
   completed: z.boolean(),
   country: z.string(),
+  isPremium: z.boolean(),
 });
 
 function stripHtmlTags(text: string): string {
@@ -431,6 +432,21 @@ const sessionColumns: ColumnDef<z.infer<typeof sessionSchema>>[] = [
     filterFn: (row, id, value) => {
       return value.includes(row.getValue(id));
     },
+  },
+  {
+    accessorKey: "isPremium",
+    header: ({ column }) => (
+      <SortableHeader column={column}>Premium</SortableHeader>
+    ),
+    cell: ({ row }) => (
+      <div className="w-24">
+        {row.original.isPremium ? (
+          <span className="text-green-600">✓ Yes</span>
+        ) : (
+          <span className="text-muted-foreground">✗ No</span>
+        )}
+      </div>
+    ),
   },
   {
     accessorKey: "timestamp",

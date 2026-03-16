@@ -20,18 +20,24 @@ interface AnalyticsData {
     previous: number;
     delta: number;
     change: string;
+    total?: number;
+    new?: number;
   };
   wau: {
     value: number;
     previous: number;
     delta: number;
     change: string;
+    total?: number;
+    new?: number;
   };
   mau: {
     value: number;
     previous: number;
     delta: number;
     change: string;
+    total?: number;
+    new?: number;
   };
 }
 
@@ -50,18 +56,39 @@ async function getAnalyticsData(): Promise<AnalyticsData> {
     console.error("Error fetching analytics:", error);
     // Return zero values on error
     return {
-      dau: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
-      wau: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
-      mau: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
+      dau: {
+        value: 0,
+        previous: 0,
+        delta: 0,
+        change: "+0.0%",
+        total: 0,
+        new: 0,
+      },
+      wau: {
+        value: 0,
+        previous: 0,
+        delta: 0,
+        change: "+0.0%",
+        total: 0,
+        new: 0,
+      },
+      mau: {
+        value: 0,
+        previous: 0,
+        delta: 0,
+        change: "+0.0%",
+        total: 0,
+        new: 0,
+      },
     };
   }
 }
 
 export function SectionCards() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>({
-    dau: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
-    wau: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
-    mau: { value: 0, previous: 0, delta: 0, change: "+0.0%" },
+    dau: { value: 0, previous: 0, delta: 0, change: "+0.0%", total: 0, new: 0 },
+    wau: { value: 0, previous: 0, delta: 0, change: "+0.0%", total: 0, new: 0 },
+    mau: { value: 0, previous: 0, delta: 0, change: "+0.0%", total: 0, new: 0 },
   });
   const [isLoading, setIsLoading] = useState(true);
   const fetchAnalytics = async () => {
@@ -89,6 +116,8 @@ export function SectionCards() {
         period="vs Yesterday"
         delta={analytics?.dau.delta}
         previous={analytics?.dau.previous}
+        total={analytics?.dau.total}
+        newUsers={analytics?.dau.new}
       />
       <CardBlock
         title="Weekly Active Users"
@@ -97,6 +126,8 @@ export function SectionCards() {
         period="vs Previous 7 days"
         delta={analytics?.wau.delta}
         previous={analytics?.wau.previous}
+        total={analytics?.wau.total}
+        newUsers={analytics?.wau.new}
       />
       <CardBlock
         title="Monthly Active Users"
@@ -105,6 +136,8 @@ export function SectionCards() {
         period="vs Previous 30 days"
         delta={analytics?.mau.delta}
         previous={analytics?.mau.previous}
+        total={analytics?.mau.total}
+        newUsers={analytics?.mau.new}
       />
     </div>
   );
