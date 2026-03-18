@@ -15,3 +15,24 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE }}" \
             -H "Content-Type: application/json" \
             -d '{}'
+
+      - name: Call Supabase Edge Function - Send Reengagement Notifications
+        run: |
+          curl -X POST "${{ secrets.SUPABASE_FUNCTION_URL }}/send-reengagement-notifications" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+      - name: Call Supabase Edge Function - Send Premium Trial Notifications
+        run: |
+          curl -X POST "${{ secrets.SUPABASE_FUNCTION_URL }}/send-premium-trial-notifications" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+      - name: Call Supabase Edge Function - Send Incomplete Onboarding Notifications
+        run: |
+          curl -X POST "${{ secrets.SUPABASE_FUNCTION_URL }}/send-incomplete-onboarding-notifications" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'

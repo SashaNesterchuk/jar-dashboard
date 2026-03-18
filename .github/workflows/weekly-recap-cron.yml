@@ -1,0 +1,16 @@
+name: Weekly Recap Push Notifications
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Monday 9am UTC
+  workflow_dispatch:
+
+jobs:
+  weekly-recap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Weekly Recap
+        run: |
+          curl -X POST "${{ secrets.DASHBOARD_URL }}/api/notifications/weekly-recap" \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP Status: %{http_code}\n"

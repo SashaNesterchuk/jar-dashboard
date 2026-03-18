@@ -1,0 +1,16 @@
+name: Monthly Recap Push Notifications
+
+on:
+  schedule:
+    - cron: "0 9 1 * *" # 1st of month, 9am UTC
+  workflow_dispatch:
+
+jobs:
+  monthly-recap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Monthly Recap
+        run: |
+          curl -X POST "${{ secrets.DASHBOARD_URL }}/api/notifications/monthly-recap" \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP Status: %{http_code}\n"
