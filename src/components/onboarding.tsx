@@ -44,8 +44,10 @@ interface OnboardingData {
     change: string;
   };
   pages?: {
-    noPremium: Record<string, number>;
-    premium: Record<string, number>;
+    noPremium?: Record<string, number>;
+    premium?: Record<string, number>;
+    /** v2: single funnel aligned with jar Onboarding.tsx `pagesSteps` */
+    flow?: Record<string, number>;
   };
   trials?: {
     ps1: {
@@ -75,7 +77,11 @@ function formatDuration(seconds: number): string {
   }
 }
 
-export function Onboarding({}: {}) {
+export function Onboarding({
+  analyticsVersion = "v2",
+}: {
+  analyticsVersion?: "v1" | "v2";
+}) {
   const [timeRange, setTimeRange] = React.useState("7d");
   const [onboardingData, setOnboardingData] =
     React.useState<OnboardingData | null>(null);
@@ -84,9 +90,10 @@ export function Onboarding({}: {}) {
   const fetchOnboardingData = React.useCallback(async (range: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/onboarding?timeRange=${range}`, {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `/api/onboarding?timeRange=${range}&analyticsVersion=${analyticsVersion}`,
+        { cache: "no-store" }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to fetch onboarding data");
@@ -105,7 +112,7 @@ export function Onboarding({}: {}) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [analyticsVersion]);
 
   React.useEffect(() => {
     fetchOnboardingData(timeRange);
@@ -124,7 +131,8 @@ export function Onboarding({}: {}) {
     }
   };
 
-  const pages = {
+  /** Legacy v1 funnels (pre–analytics_version v2). */
+  const pagesV1 = {
     noPremium: [
       "hello",
       "1",
@@ -134,7 +142,7 @@ export function Onboarding({}: {}) {
       "ps1",
       "noPremium1",
       "noPremium2",
-      "practice", // breathing, diary, questions
+      "practice",
       "notification",
       "ps2",
     ],
@@ -153,6 +161,23 @@ export function Onboarding({}: {}) {
       "notification",
     ],
   };
+
+  /** Matches `pagesSteps` in jar/components/common/v2/Onboarding/Onboarding.tsx (one ps2 in chart). */
+  const onboardingV2PageOrder: string[] = [
+    "hello",
+    "name",
+    "1",
+    "2",
+    "summaryConclusion",
+    "summaryConclusionQuestion",
+    "summaryAI",
+    "ps2",
+    "1.2",
+    "ps1",
+    "noPremium1",
+    "notification",
+    "tasks",
+  ];
 
   return (
     <Tabs defaultValue="basic" className="w-full flex-col justify-start gap-6">
@@ -261,20 +286,32 @@ export function Onboarding({}: {}) {
         </div>
       </TabsContent>
       <TabsContent value="pages" className="flex flex-col px-4 lg:px-6">
-        <div className="grid w-full grid-cols-1 gap-4 @xl/main:grid-cols-2">
+        {analyticsVersion === "v2" ? (
           <ChartAreaStep
-            title="No premium flow"
-            pages={pages.noPremium}
-            pageData={onboardingData?.pages?.noPremium}
+            title="Onboarding flow (v2)"
+            pages={onboardingV2PageOrder}
+            pageData={onboardingData?.pages?.flow}
             timeRange={timeRange}
+            stepScreens
           />
-          <ChartAreaStep
-            title="Premium flow"
-            pages={pages.premium}
-            pageData={onboardingData?.pages?.premium}
-            timeRange={timeRange}
-          />
-        </div>
+        ) : (
+          <div className="grid w-full grid-cols-1 gap-4 @xl/main:grid-cols-2">
+            <ChartAreaStep
+              title="No premium flow"
+              pages={pagesV1.noPremium}
+              pageData={onboardingData?.pages?.noPremium}
+              timeRange={timeRange}
+              stepScreens
+            />
+            <ChartAreaStep
+              title="Premium flow"
+              pages={pagesV1.premium}
+              pageData={onboardingData?.pages?.premium}
+              timeRange={timeRange}
+              stepScreens
+            />
+          </div>
+        )}
       </TabsContent>
       <TabsContent value="trial" className="flex flex-col px-4 lg:px-6">
         <div className="flex flex-1 flex-col gap-4">

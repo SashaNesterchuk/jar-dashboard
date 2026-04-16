@@ -1,6 +1,7 @@
 "use client";
 
-import { Activity, TrendingDown, TrendingUp } from "lucide-react";
+import * as React from "react";
+import { Activity, TrendingDown } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 
 import {
@@ -42,6 +43,54 @@ interface ChartAreaStepProps {
   pages: string[];
   pageData?: Record<string, number>;
   timeRange?: string;
+  /** When true, loads `/screens/<page>.png` under each step (see public/screens/README.md). */
+  stepScreens?: boolean;
+  /** Base path for step images (no trailing slash). Default: `/screens`. */
+  stepScreensBasePath?: string;
+}
+
+function stepScreenSrc(
+  page: string,
+  basePath: string
+): string {
+  const name = encodeURIComponent(page);
+  return `${basePath}/${name}.png`;
+}
+
+function StepScreenPreview({
+  page,
+  src,
+}: {
+  page: string;
+  src: string;
+}) {
+  const [failed, setFailed] = React.useState(false);
+
+  return (
+    <div className="flex w-full flex-col items-center gap-1.5">
+      <span className="max-w-[140px] truncate text-center text-xs font-medium text-muted-foreground">
+        {page}
+      </span>
+      <div className="flex h-[200px] w-full max-w-[160px] items-center justify-center overflow-hidden rounded-md border bg-muted/40">
+        {failed ? (
+          <span className="px-2 text-center text-[10px] leading-tight text-muted-foreground">
+            No preview
+            <br />
+            <code className="text-[9px] opacity-80">{page}.png</code>
+          </span>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- local static screenshots, variable aspect ratio
+          <img
+            src={src}
+            alt={`Screen: ${page}`}
+            className="max-h-[200px] w-full object-contain object-top"
+            loading="lazy"
+            onError={() => setFailed(true)}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
 function getPeriodDescription(timeRange?: string): string {
@@ -62,14 +111,20 @@ export function ChartAreaStep({
   pages,
   pageData,
   timeRange,
+  stepScreens = false,
+  stepScreensBasePath = "/screens",
 }: ChartAreaStepProps) {
   // Build chart data from pages array and pageData
-  const chartData = pages.map((page, index) => {
+  const chartData = pages.map((page) => {
     // For "1.2" page, use the value from "1" if available
     let count = 0;
     if (pageData) {
       if (page === "1.2") {
-        count = pageData["1"] || 0;
+        count =
+          Object.prototype.hasOwnProperty.call(pageData, "1.2") &&
+          pageData["1.2"] !== undefined
+            ? Number(pageData["1.2"]) || 0
+            : pageData["1"] || 0;
       } else {
         count = pageData[page] || 0;
       }
@@ -121,6 +176,9 @@ export function ChartAreaStep({
     }
   }
 
+  /** Enough width per category so labels are not crushed; narrow viewports scroll horizontally. */
+  const chartMinWidthPx = Math.max(pages.length * 80, 360);
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -131,21 +189,41 @@ export function ChartAreaStep({
         </CardDescription>
       </CardHeader>
       <CardContent className="w-full px-0">
-        <ChartContainer config={chartConfig} className="h-[200px] w-full">
+        <p className="mb-2 px-6 text-xs text-muted-foreground md:hidden">
+          Swipe horizontally to see all steps
+        </p>
+        <div className="w-full overflow-x-auto overflow-y-visible">
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-auto h-[280px] w-full min-w-0 [&_.recharts-surface]:overflow-visible"
+            style={{ minWidth: chartMinWidthPx, width: "100%" }}
+          >
           <AreaChart
             accessibilityLayer
             data={chartDataWithPercentages}
             margin={{
-              left: 12,
+              left: 8,
               right: 12,
+              top: 8,
+              bottom: 4,
             }}
           >
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="page"
+              type="category"
               tickLine={false}
               axisLine={false}
-              tickMargin={8}
+              interval={0}
+              tickMargin={10}
+              height={84}
+              tick={{
+                fontSize: 11,
+                fill: "hsl(var(--muted-foreground))",
+              }}
+              angle={-40}
+              textAnchor="end"
+              tickFormatter={(value) => String(value)}
             />
             <ChartTooltip
               cursor={false}
@@ -161,6 +239,30 @@ export function ChartAreaStep({
             />
           </AreaChart>
         </ChartContainer>
+        </div>
+        {stepScreens ? (
+          <div className="mt-6 w-full border-t pt-4">
+            <p className="mb-3 px-6 text-xs text-muted-foreground">
+              Step previews (PNG in{" "}
+              <code className="rounded bg-muted px-1 py-0.5">public/screens</code>
+              )
+            </p>
+            <div className="flex gap-3 overflow-x-auto px-6 pb-2">
+              {pages.map((page) => (
+                <div
+                  key={page}
+                  className="flex shrink-0 flex-col"
+                  style={{ minWidth: "140px" }}
+                >
+                  <StepScreenPreview
+                    page={page}
+                    src={stepScreenSrc(page, stepScreensBasePath)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </CardContent>
       <CardFooter>
         <div className="flex w-full items-start gap-2 text-sm">

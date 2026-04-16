@@ -15,6 +15,13 @@ interface PostHogQueryResponse {
   };
 }
 
+function getVersionFilter(analyticsVersion: "v1" | "v2"): string {
+  if (analyticsVersion === "v2") {
+    return `JSONExtractString(properties,'analytics_version') = 'v2'`;
+  }
+  return `(JSONExtractString(properties,'analytics_version') != 'v2' OR JSONExtractString(properties,'analytics_version') = '')`;
+}
+
 async function queryPostHogArray(
   query: string
 ): Promise<Array<Array<number | string>>> {
@@ -197,6 +204,9 @@ export async function GET(request: NextRequest) {
     const environment = "production";
     const searchParams = request.nextUrl.searchParams;
     const timeRange = searchParams.get("timeRange") || "7d";
+    const analyticsVersionParam = searchParams.get("analyticsVersion") || "v2";
+    const analyticsVersion: "v1" | "v2" =
+      analyticsVersionParam === "v1" ? "v1" : "v2";
 
     if (!["7d", "30d", "90d"].includes(timeRange)) {
       return NextResponse.json(
@@ -213,8 +223,12 @@ export async function GET(request: NextRequest) {
     const compStartIso = comparisonWindow.start.toISOString();
     const compEndIso = comparisonWindow.end.toISOString();
 
-    const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}'`;
-    const compBaseFilters = `timestamp >= toDateTime('${compStartIso}','Europe/Warsaw') AND timestamp < toDateTime('${compEndIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}'`;
+    const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
+      analyticsVersion
+    )}`;
+    const compBaseFilters = `timestamp >= toDateTime('${compStartIso}','Europe/Warsaw') AND timestamp < toDateTime('${compEndIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
+      analyticsVersion
+    )}`;
 
     // Build queries for current period
     const usersStartedQuery = `SELECT uniqExact(JSONExtractString(properties,'user_id')) AS value FROM events WHERE event = 'mood_check_in_started' AND ${baseFilters} AND JSONExtractString(properties,'user_id') IS NOT NULL AND JSONExtractString(properties,'user_id') != ''`;

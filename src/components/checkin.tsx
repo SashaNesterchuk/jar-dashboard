@@ -103,7 +103,11 @@ function formatDuration(seconds: number): string {
   }
 }
 
-export function Checkin({}: {}) {
+export function Checkin({
+  analyticsVersion = "v2",
+}: {
+  analyticsVersion?: "v1" | "v2";
+}) {
   const [timeRange, setTimeRange] = React.useState("7d");
   const [checkinData, setCheckinData] = React.useState<CheckinData | null>(
     null
@@ -113,9 +117,10 @@ export function Checkin({}: {}) {
   const fetchCheckinData = React.useCallback(async (range: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/checkin?timeRange=${range}`, {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `/api/checkin?timeRange=${range}&analyticsVersion=${analyticsVersion}`,
+        { cache: "no-store" }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to fetch checkin data");
@@ -135,7 +140,7 @@ export function Checkin({}: {}) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [analyticsVersion]);
 
   React.useEffect(() => {
     fetchCheckinData(timeRange);

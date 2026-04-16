@@ -1,14 +1,27 @@
-const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD_HASH_HEX =
-  "67948109603cfd0dfd716a6bbedf866028710dc613914e378b40f7ba62aa60ba";
+/** SHA-256(password) hex, same scheme as legacy single admin user */
+const DASHBOARD_USERS: { username: string; passwordHashHex: string }[] = [
+  {
+    username: "admin",
+    passwordHashHex:
+      "67948109603cfd0dfd716a6bbedf866028710dc613914e378b40f7ba62aa60ba",
+  },
+  {
+    username: "sasha",
+    passwordHashHex:
+      "9a30daf3563c578d673894ddaaa5c0ce5ba5ed5a83aad6a10017dc42b3e13386",
+  },
+  {
+    username: "dima",
+    passwordHashHex:
+      "d4461075d2cd518c12ea5c23caa42d1603b025175495ba4a67a938fa852169b8",
+  },
+];
 
 export const SESSION_COOKIE_NAME = "mindjar_session";
 export const SESSION_TTL_SECONDS = 60 * 60 * 12; // 12 hours
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
-const ADMIN_USERNAME_BYTES = TEXT_ENCODER.encode(ADMIN_USERNAME);
-const ADMIN_PASSWORD_HASH_BYTES = hexToBytes(ADMIN_PASSWORD_HASH_HEX);
 
 let cachedSecret: Uint8Array | null = null;
 let cachedHmacKey: CryptoKey | null = null;
@@ -150,15 +163,18 @@ export async function verifyCredentials(
   username: string,
   password: string
 ): Promise<boolean> {
-  const usernameBytes = TEXT_ENCODER.encode(username);
-
-  if (!timingSafeEqualBytes(usernameBytes, ADMIN_USERNAME_BYTES)) {
+  const normalized = username.trim().toLowerCase();
+  const user = DASHBOARD_USERS.find(
+    (u) => u.username.toLowerCase() === normalized
+  );
+  if (!user) {
     return false;
   }
 
   const submittedHash = await digestSha256(password);
+  const expectedHash = hexToBytes(user.passwordHashHex);
 
-  return timingSafeEqualBytes(submittedHash, ADMIN_PASSWORD_HASH_BYTES);
+  return timingSafeEqualBytes(submittedHash, expectedHash);
 }
 
 export async function createSessionToken(

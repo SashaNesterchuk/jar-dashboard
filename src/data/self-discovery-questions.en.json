@@ -1,0 +1,2515 @@
+{
+  "selfDiscoveryPractice": {
+    "attachmentStyleTest": {
+      "title": "Discover Your Attachment Style",
+      "description": "",
+      "traits": [
+        {
+          "title": "Anxious",
+          "description": "Anxious"
+        },
+        {
+          "title": "Avoidant",
+          "description": "Avoidant"
+        },
+        {
+          "title": "Secure",
+          "description": "Secure"
+        }
+      ],
+      "pages": [
+        {
+          "description": "What feels true for you in relationships?",
+          "questions": [
+            {
+              "label": "I worry that people I love will leave me"
+            },
+            {
+              "label": "I feel safer when I keep emotional distance"
+            },
+            {
+              "label": "I often need reassurance that I'm loved"
+            },
+            {
+              "label": "I find it easy to trust and relax in close relationships"
+            }
+          ]
+        },
+        {
+          "description": "What feels true for you in relationships?",
+          "questions": [
+            {
+              "label": "I worry that people I love will leave me"
+            },
+            {
+              "label": "I feel safer when I keep emotional distance"
+            },
+            {
+              "label": "I often need reassurance that I'm loved"
+            },
+            {
+              "label": "I find it easy to trust and relax in close relationships"
+            }
+          ]
+        },
+        {
+          "description": "What feels true for you in relationships?",
+          "questions": [
+            {
+              "label": "I worry that people I love will leave me"
+            },
+            {
+              "label": "I feel safer when I keep emotional distance"
+            },
+            {
+              "label": "I often need reassurance that I'm loved"
+            },
+            {
+              "label": "I find it easy to trust and relax in close relationships"
+            }
+          ]
+        },
+        {
+          "description": "What feels true for you in relationships?",
+          "questions": [
+            {
+              "label": "I worry that people I love will leave me"
+            },
+            {
+              "label": "I feel safer when I keep emotional distance"
+            },
+            {
+              "label": "I often need reassurance that I'm loved"
+            },
+            {
+              "label": "I find it easy to trust and relax in close relationships"
+            }
+          ]
+        }
+      ]
+    },
+    "attachmentStyleSnapshotTest": {
+      "title": "Attachment Style Snapshot",
+      "description": "",
+      "traits": [
+        {
+          "title": "Anxious",
+          "description": "## Overview\nYou seek closeness and reassurance, especially when things feel uncertain. Hypervigilance about distance can drive reaching out more than you intend.\n\n### How it shows\n- Frequent check-ins when plans feel vague\n- Ruminating about tone or timing\n- Relief when contact and plans are steady\n\n### Strengths\n- Deep care and emotional attunement\n- Motivation to repair and connect\n\n### Growth prompts\n- Self-soothe before checking in\n- Ask for clear timelines (what/when)\n- Track evidence of safety over time\n"
+        },
+        {
+          "title": "Avoidant",
+          "description": "## Overview\nYou value autonomy and calm. Under stress, you may minimize needs or emotionally step back to regain equilibrium.\n\n### How it shows\n- Pulling back when conflict rises\n- Preferring slow, low-pressure intimacy\n- Processing privately before sharing\n\n### Strengths\n- Composure and clear boundaries\n- Independence and pragmatic thinking\n\n### Growth prompts\n- Share needs in small, early ways\n- Use time-bound pauses (\"back in 30m\")\n- Practice receiving care without debt\n"
+        },
+        {
+          "title": "Secure",
+          "description": "## Overview\nYou balance closeness and independence. You name needs, assume goodwill, and repair effectively.\n\n### How it shows\n- Tolerates ambiguity without spiraling\n- Direct, collaborative problem-solving\n- Repair that restores connection\n\n### Strengths\n- Flexibility and trust-building\n- Clear asks and boundaries\n\n### Growth prompts\n- Keep modeling clean repair\n- Invite mutual check-ins and rituals\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Attachment Style Snapshot\nMap your defaults around closeness, conflict, and reassurance.\n\n## What you'll learn\n- Your response under uncertainty (seek, step back, collaborate)\n- What restores safety fastest for you\n- Simple scripts to ask for what you need\n\n## Notes\n- There are no right answers, only patterns\n- Weigh results by season and context\n\n This is a reflection tool, not a diagnosis."
+        },
+        {
+          "description": "When I feel unsure in a close relationship, I usually...",
+          "questions": [
+            {
+              "label": "seek reassurance or check-in more often"
+            },
+            {
+              "label": "pull back to create space and think"
+            },
+            {
+              "label": "communicate feelings and needs directly"
+            },
+            {
+              "label": "distract myself and wait until it passes"
+            }
+          ]
+        },
+        {
+          "description": "When a conflict starts, my first impulse is to...",
+          "questions": [
+            {
+              "label": "fix it now and seek closeness"
+            },
+            {
+              "label": "take space and revisit later"
+            },
+            {
+              "label": "stay present and problem-solve together"
+            },
+            {
+              "label": "downplay it so it doesn't escalate"
+            }
+          ]
+        },
+        {
+          "description": "Closeness for me mostly feels...",
+          "questions": [
+            {
+              "label": "like relief and safety when it's steady"
+            },
+            {
+              "label": "like pressure; I need breathing room"
+            },
+            {
+              "label": "warm, supportive, and flexible"
+            },
+            {
+              "label": "good but sometimes overwhelming"
+            }
+          ]
+        },
+        {
+          "description": "When plans feel uncertain, I tend to...",
+          "questions": [
+            {
+              "label": "check in for clarity or reassurance"
+            },
+            {
+              "label": "detach emotionally to avoid disappointment"
+            },
+            {
+              "label": "align expectations and move forward"
+            },
+            {
+              "label": "postpone talking until it sorts itself out"
+            }
+          ]
+        },
+        {
+          "description": "When I don't get a reply for hours, I...",
+          "questions": [
+            {
+              "label": "notice anxious stories and reality-check"
+            },
+            {
+              "label": "cool off and focus elsewhere"
+            },
+            {
+              "label": "name my need for timeline clarity later"
+            },
+            {
+              "label": "assume best intent until proven otherwise"
+            }
+          ]
+        },
+        {
+          "description": "In repair after conflict, I usually...",
+          "questions": [
+            {
+              "label": "seek closeness quickly to feel safe"
+            },
+            {
+              "label": "process alone first, then engage"
+            },
+            {
+              "label": "own impact and ask for needs"
+            },
+            {
+              "label": "delay repair hoping time fixes it"
+            }
+          ]
+        },
+        {
+          "description": "When a partner shares a need that's hard for me, I...",
+          "questions": [
+            {
+              "label": "over-promise to reduce their distress"
+            },
+            {
+              "label": "minimize or change topic"
+            },
+            {
+              "label": "negotiate specifics and try small experiments"
+            },
+            {
+              "label": "set time-bound limits and revisit"
+            }
+          ]
+        },
+        {
+          "description": "If I fear being too much or not enough, I tend to...",
+          "questions": [
+            {
+              "label": "seek proof of care (texts, time, words)"
+            },
+            {
+              "label": "double down on self-sufficiency"
+            },
+            {
+              "label": "have a meta-talk about reassurance patterns"
+            },
+            {
+              "label": "check facts and recent behavior trends"
+            }
+          ]
+        }
+      ]
+    },
+    "loveLanguagesCheckInTest": {
+      "title": "Love Languages Check-In",
+      "description": "",
+      "traits": [
+        {
+          "title": "Words of Affirmation",
+          "description": "## What fills your cup\nSpecific, sincere words that mirror your effort, character, or needs.\n\n### Signals that land\n- Reflective appreciation (what, why it matters)\n- Encouraging texts or voice notes\n- Clear naming of impact after support\n\n### Tips\n- Ask for concrete examples\n- Save notes for low days\n"
+        },
+        {
+          "title": "Quality Time",
+          "description": "## What fills your cup\nUndistracted presence and shared focus.\n\n### Signals that land\n- Protected time blocks together\n- Devices down, shoulder-to-shoulder activities\n- Focused check-ins\n\n### Tips\n- Co-create weekly anchor time\n- Define \"present\" norms\n"
+        },
+        {
+          "title": "Acts of Service",
+          "description": "## What fills your cup\nHelpful actions that reduce friction and add ease.\n\n### Signals that land\n- Handling logistics proactively\n- Follow-through on promises\n- Prep before big days\n\n### Tips\n- Share top-3 helpful acts\n- Appreciate effort over perfection\n"
+        },
+        {
+          "title": "Physical Touch",
+          "description": "## What fills your cup\nWarm, consensual touch that co-regulates.\n\n### Signals that land\n- Hugs, hand squeezes, cuddles\n- Soothing touch during stress\n- Playful physicality\n\n### Tips\n- Agree on contexts and boundaries\n- Pair touch with words when needed\n"
+        },
+        {
+          "title": "Gifts",
+          "description": "## What fills your cup\nTangible tokens that symbolize noticing, memory, or care.\n\n### Signals that land\n- Small surprises linked to inside jokes\n- Useful items that show attentiveness\n- Mementos from shared experiences\n\n### Tips\n- Keep a \"wish list\" note\n- Balance surprise with practicality\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Love Languages Check-In\nIdentify the signals of care that land most for you.\n\n## You'll learn\n- Your top channels (words, time, acts, touch, gifts)\n- Micro-gestures with outsized impact\n- Clear ways to ask for care\n\n> You can value more than one; priorities shift by season."
+        },
+        {
+          "description": "A partner shows love best when they...",
+          "questions": [
+            {
+              "label": "say supportive, specific affirmations"
+            },
+            {
+              "label": "plan quality time without distractions"
+            },
+            {
+              "label": "handle a task that eases my load"
+            },
+            {
+              "label": "offer warm hugs or closeness"
+            }
+          ]
+        },
+        {
+          "description": "What feels like care after a hard day?",
+          "questions": [
+            {
+              "label": "listening and kind words"
+            },
+            {
+              "label": "quiet time together (walk, show)"
+            },
+            {
+              "label": "doing an errand or cooking"
+            },
+            {
+              "label": "a small, thoughtful gift"
+            }
+          ]
+        },
+        {
+          "description": "On an ordinary day, what lifts you most?",
+          "questions": [
+            {
+              "label": "a sweet message or note"
+            },
+            {
+              "label": "scheduled time just for us"
+            },
+            {
+              "label": "help finishing a to-do"
+            },
+            {
+              "label": "a cuddle or hand squeeze"
+            }
+          ]
+        },
+        {
+          "description": "Which gesture would you pick on a special day?",
+          "questions": [
+            {
+              "label": "a heartfelt letter"
+            },
+            {
+              "label": "a planned outing together"
+            },
+            {
+              "label": "they take care of arrangements"
+            },
+            {
+              "label": "a meaningful present"
+            }
+          ]
+        },
+        {
+          "description": "During conflict repair, I feel most loved when...",
+          "questions": [
+            {
+              "label": "they name impact with sincerity"
+            },
+            {
+              "label": "we schedule time to reconnect"
+            },
+            {
+              "label": "they do a helpful follow-through"
+            },
+            {
+              "label": "reassuring hug or closeness"
+            }
+          ]
+        },
+        {
+          "description": "Weekend ritual I'd keep forever...",
+          "questions": [
+            {
+              "label": "share \"high/low/learn\" check-ins"
+            },
+            {
+              "label": "a protected date block"
+            },
+            {
+              "label": "divide-and-conquer chores"
+            },
+            {
+              "label": "tiny surprise or treat"
+            }
+          ]
+        },
+        {
+          "description": "In a long-distance phase, what matters most?",
+          "questions": [
+            {
+              "label": "daily notes or voice messages"
+            },
+            {
+              "label": "scheduled video dates"
+            },
+            {
+              "label": "care packages or helpful logistics"
+            },
+            {
+              "label": "meaningful mailed mementos"
+            }
+          ]
+        },
+        {
+          "description": "What misfires hurt most when you need care?",
+          "questions": [
+            {
+              "label": "vague platitudes instead of specifics"
+            },
+            {
+              "label": "distracted \"together time\""
+            },
+            {
+              "label": "promises without action"
+            },
+            {
+              "label": "expensive gifts that miss the mark"
+            }
+          ]
+        }
+      ]
+    },
+    "bidsForConnectionHabitTest": {
+      "title": "Bids for Connection Habit",
+      "description": "",
+      "traits": [
+        {
+          "title": "Turn Toward",
+          "description": "## Pattern\nYou consistently notice and respond to tiny bids for connection.\n\n### Behaviors\n- Orient, smile, or ask a follow-up\n- Acknowledge even when busy\n\n### Impact\n- Trust compounds via micro-moments\n- Faster repair under stress\n"
+        },
+        {
+          "title": "Neutral",
+          "description": "## Pattern\nSometimes you engage, sometimes you miss bids—often due to distraction.\n\n### Behaviors\n- Brief nods without switching tasks\n- Mixed consistency across contexts\n\n### Support\n- Add \"bid windows\" in routines\n- Use reminders to catch small moments\n"
+        },
+        {
+          "title": "Turn Away",
+          "description": "## Pattern\nYou often miss or deflect bids—particularly under load.\n\n### Behaviors\n- Device focus over brief engagement\n- Topic changes or jokes to avoid depth\n\n### Repair\n- Name misses and invite re-bids\n- Practice 10–30s micro-turns\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Bids for Connection Habit\nSmall moments build big bonds. Measure how often you turn toward.\n\n## Why it matters\n- Micro-engagement predicts stability\n- Turning toward in stress increases safety\n\n## Use your results\n- Set two daily \"bid windows\"\n- Create a re-bid script after misses"
+        },
+        {
+          "description": "When someone shows me a small thing they're excited about...",
+          "questions": [
+            {
+              "label": "I pause, look, and react positively"
+            },
+            {
+              "label": "I acknowledge briefly but keep doing my thing"
+            },
+            {
+              "label": "I often miss it or say I'm busy"
+            },
+            {
+              "label": "I change topic or redirect to tasks"
+            }
+          ]
+        },
+        {
+          "description": "During daily routines, I...",
+          "questions": [
+            {
+              "label": "invite small moments to check-in"
+            },
+            {
+              "label": "sometimes notice, sometimes don't"
+            },
+            {
+              "label": "rarely notice unless it's obvious"
+            },
+            {
+              "label": "stay on my device and nod"
+            }
+          ]
+        },
+        {
+          "description": "When stressed, my response to bids...",
+          "questions": [
+            {
+              "label": "is to engage even more intentionally"
+            },
+            {
+              "label": "depends on the day"
+            },
+            {
+              "label": "drops; I withdraw"
+            },
+            {
+              "label": "I joke or deflect instead of engaging"
+            }
+          ]
+        },
+        {
+          "description": "I want to improve by...",
+          "questions": [
+            {
+              "label": "naming and responding to tiny bids"
+            },
+            {
+              "label": "reducing distractions at key times"
+            },
+            {
+              "label": "setting \"not now\" boundaries clearly"
+            },
+            {
+              "label": "making device rules to avoid turning away"
+            }
+          ]
+        },
+        {
+          "description": "When I'm the one bidding, I usually...",
+          "questions": [
+            {
+              "label": "ask clearly and invite a moment"
+            },
+            {
+              "label": "hint and hope they notice"
+            },
+            {
+              "label": "stop bidding if ignored"
+            },
+            {
+              "label": "re-bid with a script later"
+            }
+          ]
+        },
+        {
+          "description": "Preferred micro-connection in busy times...",
+          "questions": [
+            {
+              "label": "eye contact + smile"
+            },
+            {
+              "label": "quick wave/acknowledgment"
+            },
+            {
+              "label": "text me later—I'm focused"
+            },
+            {
+              "label": "brief touch or fist bump"
+            }
+          ]
+        },
+        {
+          "description": "Common miss for me is...",
+          "questions": [
+            {
+              "label": "device distraction"
+            },
+            {
+              "label": "task tunnel-vision"
+            },
+            {
+              "label": "misreading neutral as negative"
+            },
+            {
+              "label": "over-analyzing intent"
+            }
+          ]
+        },
+        {
+          "description": "Best habit to raise my turn-toward rate...",
+          "questions": [
+            {
+              "label": "set anchor \"bid windows\""
+            },
+            {
+              "label": "create a device basket at dinner"
+            },
+            {
+              "label": "use a 60s pause before replying \"later\""
+            },
+            {
+              "label": "label bids out loud (\"that was a bid!\")"
+            }
+          ]
+        }
+      ]
+    },
+    "boundariesComfortIndexTest": {
+      "title": "Boundaries Comfort Index",
+      "description": "",
+      "traits": [
+        {
+          "title": "Ease with Boundaries",
+          "description": "## Pattern\nYou clearly state limits and renegotiate with care.\n\n### Strengths\n- Early, direct communication\n- Consistent follow-through\n\n### Growth\n- Share brief \"why\" for buy-in\n- Add review dates to agreements\n"
+        },
+        {
+          "title": "Balanced Comfort",
+          "description": "## Pattern\nGenerally comfortable, with a few hot-spots.\n\n### Strengths\n- Flexible negotiation\n- Context awareness\n\n### Growth\n- Script tricky scenarios\n- Track resentment as a cue\n"
+        },
+        {
+          "title": "Challenging",
+          "description": "## Pattern\nSaying no feels risky; over-accommodation is common.\n\n### Signals\n- Silent yes followed by resentment\n- Indirect or delayed no\n\n### Growth\n- Practice tiny, kind no's\n- Use \"not now, but...\" templates\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Boundaries Comfort Index\nGauge how easily you set limits and renegotiate plans.\n\n## Why it matters\n- Prevent covert contracts and burnout\n- Create mutual clarity and trust\n\n## Use your results\n- Adopt 2 scripts for sticky contexts\n- Add boundary review rituals"
+        },
+        {
+          "description": "When a plan no longer works for me...",
+          "questions": [
+            {
+              "label": "I restate needs and propose an alternative"
+            },
+            {
+              "label": "I hint or hope they infer"
+            },
+            {
+              "label": "I avoid and hope it resolves itself"
+            },
+            {
+              "label": "I balance both needs and reschedule"
+            }
+          ]
+        },
+        {
+          "description": "Saying no feels...",
+          "questions": [
+            {
+              "label": "clear and doable when needed"
+            },
+            {
+              "label": "okay, depends on context"
+            },
+            {
+              "label": "hard—I fear disappointing others"
+            },
+            {
+              "label": "I delay the no and overcommit"
+            }
+          ]
+        },
+        {
+          "description": "When someone pushes past my limit...",
+          "questions": [
+            {
+              "label": "I reassert clearly and hold the line"
+            },
+            {
+              "label": "I renegotiate to find middle ground"
+            },
+            {
+              "label": "I freeze and comply"
+            },
+            {
+              "label": "I defer and bring it up later"
+            }
+          ]
+        },
+        {
+          "description": "I'd like to improve by...",
+          "questions": [
+            {
+              "label": "using scripts to say no kindly"
+            },
+            {
+              "label": "checking in with my needs sooner"
+            },
+            {
+              "label": "stating limits directly and early"
+            },
+            {
+              "label": "following up to reinforce agreements"
+            }
+          ]
+        },
+        {
+          "description": "The boundary I most avoid is...",
+          "questions": [
+            {
+              "label": "time/scheduling"
+            },
+            {
+              "label": "capacity/energy limits"
+            },
+            {
+              "label": "money/spending"
+            },
+            {
+              "label": "emotional availability"
+            }
+          ]
+        },
+        {
+          "description": "My go-to boundary script is...",
+          "questions": [
+            {
+              "label": "not now—let's revisit on [date]"
+            },
+            {
+              "label": "I can't do X, I can do Y"
+            },
+            {
+              "label": "My needs changed; I need to rescope"
+            },
+            {
+              "label": "no (without context); freeze up"
+            }
+          ]
+        },
+        {
+          "description": "What spikes resentment fastest?",
+          "questions": [
+            {
+              "label": "last-minute asks assumed as yes"
+            },
+            {
+              "label": "repeating boundaries not respected"
+            },
+            {
+              "label": "saying yes silently then stewing"
+            },
+            {
+              "label": "guilt-tripping after no"
+            }
+          ]
+        },
+        {
+          "description": "One practice to level-up my boundaries...",
+          "questions": [
+            {
+              "label": "weekly boundary review (what worked?)"
+            },
+            {
+              "label": "build a script bank for hot-spots"
+            },
+            {
+              "label": "track body cues when I mean no"
+            },
+            {
+              "label": "practice kinder, earlier no's"
+            }
+          ]
+        }
+      ]
+    },
+    "situationshipToleranceScaleTest": {
+      "title": "Situationship Tolerance Scale",
+      "description": "",
+      "traits": [
+        {
+          "title": "Low Tolerance",
+          "description": "## Preference\nYou prefer clarity, labels, and steady expectations.\n\n### Signals\n- Early DTR conversations\n- Discomfort with long ambiguity\n\n### Support\n- Time-bound clarity checkpoints\n- Agreements for exclusivity if desired\n"
+        },
+        {
+          "title": "Medium Tolerance",
+          "description": "## Preference\nYou can handle some ambiguity if care and effort are consistent.\n\n### Signals\n- Context-based pacing\n- Clarity sought after patterns form\n\n### Support\n- Milestone reviews (30/60/90 days)\n- Define \"what counts\" as care\n"
+        },
+        {
+          "title": "High Tolerance",
+          "description": "## Preference\nFlexible about labels; value flow and evolving definitions.\n\n### Signals\n- Comfort with open dynamics\n- Trust built through presence\n\n### Support\n- Transparent boundaries and calendars\n- Explicit risk/need discussions\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Situationship Tolerance Scale\nHow comfortable are you with ambiguity, labels, and exclusivity?\n\n## You'll learn\n- Your comfort range with undefined phases\n- What you need to feel steady\n- Checkpoints to reduce drift"
+        },
+        {
+          "description": "When a connection stays undefined...",
+          "questions": [
+            {
+              "label": "I want to define it soon"
+            },
+            {
+              "label": "I observe a bit, then discuss"
+            },
+            {
+              "label": "I'm fine flowing without labels"
+            },
+            {
+              "label": "I pause dating until it's clearer"
+            }
+          ]
+        },
+        {
+          "description": "About exclusivity...",
+          "questions": [
+            {
+              "label": "I prefer discussing it early"
+            },
+            {
+              "label": "depends on connection and pace"
+            },
+            {
+              "label": "open dynamics can work for me"
+            },
+            {
+              "label": "I delay until there's a reason"
+            }
+          ]
+        },
+        {
+          "description": "When I feel ambiguity...",
+          "questions": [
+            {
+              "label": "I feel anxious and seek clarity"
+            },
+            {
+              "label": "I manage it if care is steady"
+            },
+            {
+              "label": "I enjoy flexibility and freedom"
+            },
+            {
+              "label": "I take space until it settles"
+            }
+          ]
+        },
+        {
+          "description": "Ideally, I want...",
+          "questions": [
+            {
+              "label": "clear agreements and labels"
+            },
+            {
+              "label": "flexible but named structure"
+            },
+            {
+              "label": "open, evolving relationship"
+            },
+            {
+              "label": "case-by-case clarity discussions"
+            }
+          ]
+        },
+        {
+          "description": "Markers of progress for me are...",
+          "questions": [
+            {
+              "label": "more regular time on each other's calendar"
+            },
+            {
+              "label": "steadier care signals over labels"
+            },
+            {
+              "label": "milestone talks (30/60/90 days)"
+            },
+            {
+              "label": "greater social visibility of the relationship"
+            }
+          ]
+        },
+        {
+          "description": "Ambiguity triggers I notice...",
+          "questions": [
+            {
+              "label": "multiple partners without clarity"
+            },
+            {
+              "label": "inconsistent communication"
+            },
+            {
+              "label": "push for labels too fast"
+            },
+            {
+              "label": "kept private without reason"
+            }
+          ]
+        },
+        {
+          "description": "If we disagree on pace, I...",
+          "questions": [
+            {
+              "label": "negotiate boundaries and pace"
+            },
+            {
+              "label": "pause until clarity exists"
+            },
+            {
+              "label": "continue with openness and no labels"
+            },
+            {
+              "label": "exit if values mismatch persists"
+            }
+          ]
+        },
+        {
+          "description": "A helpful agreement template would be...",
+          "questions": [
+            {
+              "label": "exclusivity after a time-bound window"
+            },
+            {
+              "label": "monthly clarity check-ins"
+            },
+            {
+              "label": "explicit openness + boundary list"
+            },
+            {
+              "label": "safety rules + visibility agreements"
+            }
+          ]
+        }
+      ]
+    },
+    "jealousyTriggersMapTest": {
+      "title": "Jealousy Triggers Map",
+      "description": "",
+      "traits": [
+        {
+          "title": "Low Jealousy",
+          "description": "## Baseline\nJealousy is rare; trust and self-regulation are strong.\n\n### Strengths\n- Calm appraisal of context\n- Internal soothing skills\n\n### Tips\n- Share internal process to support partners\n- Keep agreements visible and simple\n"
+        },
+        {
+          "title": "Context-Sensitive",
+          "description": "## Baseline\nCertain contexts trigger you; clarity and communication help.\n\n### Triggers\n- Secrecy, inconsistent signals\n- Past-pattern echoes\n\n### Tips\n- Pre-plan scripts for hot contexts\n- Define \"green/amber/red\" zones together\n"
+        },
+        {
+          "title": "High Jealousy",
+          "description": "## Baseline\nJealous feelings arise often; reassurance and explicit agreements help.\n\n### Patterns\n- Comparison loops, hypervigilance\n- Fast reassurance seeking\n\n### Tips\n- Time-bound reassurance + tracking safety evidence\n- Design shared rituals that replenish security\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Jealousy Triggers Map\nFind contexts that trigger jealousy and the responses that help.\n\n## You'll learn\n- Your main triggers and coping patterns\n- Agreements that reduce spikes\n- Rituals that restore safety"
+        },
+        {
+          "description": "Seeing my partner engage closely with others...",
+          "questions": [
+            {
+              "label": "is fine—I trust our bond"
+            },
+            {
+              "label": "depends on boundaries and context"
+            },
+            {
+              "label": "makes me uneasy—I need reassurance"
+            },
+            {
+              "label": "I prefer clear limits upfront"
+            }
+          ]
+        },
+        {
+          "description": "When jealousy shows up, I...",
+          "questions": [
+            {
+              "label": "self-soothe and check my story"
+            },
+            {
+              "label": "discuss it and set agreements"
+            },
+            {
+              "label": "seek reassurance quickly"
+            },
+            {
+              "label": "withdraw until I cool down"
+            }
+          ]
+        },
+        {
+          "description": "My typical trigger is...",
+          "questions": [
+            {
+              "label": "rare; mostly internal stories"
+            },
+            {
+              "label": "specific past patterns or secrecy"
+            },
+            {
+              "label": "often—comparisons and attention shifts"
+            },
+            {
+              "label": "social media cues or hidden messages"
+            }
+          ]
+        },
+        {
+          "description": "What helps most?",
+          "questions": [
+            {
+              "label": "time and self-regulation"
+            },
+            {
+              "label": "clarity on boundaries"
+            },
+            {
+              "label": "extra reassurance for a bit"
+            },
+            {
+              "label": "explicit agreements and check-ins"
+            }
+          ]
+        },
+        {
+          "description": "Social context that spikes me is...",
+          "questions": [
+            {
+              "label": "parties with flirty dynamics"
+            },
+            {
+              "label": "private DMs with little visibility"
+            },
+            {
+              "label": "public affection with others"
+            },
+            {
+              "label": "rarely spikes; context-based only"
+            }
+          ]
+        },
+        {
+          "description": "Agreement that calms me most...",
+          "questions": [
+            {
+              "label": "visibility (who/when) for sensitive contexts"
+            },
+            {
+              "label": "check-ins before/after plans"
+            },
+            {
+              "label": "explicit boundaries around closeness"
+            },
+            {
+              "label": "time-bound reassurance practice"
+            }
+          ]
+        },
+        {
+          "description": "When jealousy fades, it's because...",
+          "questions": [
+            {
+              "label": "evidence of steady care accumulates"
+            },
+            {
+              "label": "rituals of closeness and visibility"
+            },
+            {
+              "label": "repair after small ruptures is clean"
+            },
+            {
+              "label": "my internal stories are challenged"
+            }
+          ]
+        },
+        {
+          "description": "A practice to strengthen me...",
+          "questions": [
+            {
+              "label": "journal evidence vs. stories"
+            },
+            {
+              "label": "script reassuring meta-talks"
+            },
+            {
+              "label": "10-minute soothe before reaching out"
+            },
+            {
+              "label": "design a visibility boundary"
+            }
+          ]
+        }
+      ]
+    },
+    "textingStyleDecoderTest": {
+      "title": "Texting Style Decoder",
+      "description": "",
+      "traits": [
+        {
+          "title": "Rapid Responder",
+          "description": "## Baseline\nFast replies feel natural; immediacy over depth.\n\n### Strengths\n- Momentum and clarity\n- Low friction for coordination\n\n### Growth\n- Add context when brief\n- Use \"later reply\" signals when busy\n"
+        },
+        {
+          "title": "Thoughtful Texter",
+          "description": "## Baseline\nYou prefer considered replies; depth over speed.\n\n### Strengths\n- Clarity and nuance\n- Lower misreads\n\n### Growth\n- Set expectations for reply windows\n- Use quick \"seen + later\" when needed\n"
+        },
+        {
+          "title": "Laid-Back Messenger",
+          "description": "## Baseline\nYou text in waves; casual norms and flexible timing.\n\n### Strengths\n- Easygoing coordination\n- Low pressure in threads\n\n### Growth\n- Add structure for time-sensitive topics\n- Label urgency/priority when needed\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Texting Style Decoder\nUnderstand your reply speed, tone, norms, and expectations.\n\n## Use this\n- Set shared texting norms\n- Prevent misreads and pressure cycles"
+        },
+        {
+          "description": "My baseline reply speed is...",
+          "questions": [
+            {
+              "label": "fast—minutes, if I can"
+            },
+            {
+              "label": "considered—after I think"
+            },
+            {
+              "label": "in waves—when free"
+            },
+            {
+              "label": "varies by person + context"
+            }
+          ]
+        },
+        {
+          "description": "Emoji and tone...",
+          "questions": [
+            {
+              "label": "use many, playful"
+            },
+            {
+              "label": "clear, punctuated"
+            },
+            {
+              "label": "sparse, short"
+            },
+            {
+              "label": "match the other person"
+            }
+          ]
+        },
+        {
+          "description": "Double-text norms...",
+          "questions": [
+            {
+              "label": "totally okay if needed"
+            },
+            {
+              "label": "depends on context"
+            },
+            {
+              "label": "rare—prefer patience"
+            },
+            {
+              "label": "prefer tidy threads"
+            }
+          ]
+        },
+        {
+          "description": "Expectations from others...",
+          "questions": [
+            {
+              "label": "reply soon if possible"
+            },
+            {
+              "label": "send thoughtful messages"
+            },
+            {
+              "label": "be chill and flexible"
+            },
+            {
+              "label": "no strict rules"
+            }
+          ]
+        },
+        {
+          "description": "Read receipts and indicators...",
+          "questions": [
+            {
+              "label": "off—reduces pressure"
+            },
+            {
+              "label": "on for close people only"
+            },
+            {
+              "label": "on for all—transparency"
+            },
+            {
+              "label": "prefer no pressure features"
+            }
+          ]
+        },
+        {
+          "description": "Thread organization...",
+          "questions": [
+            {
+              "label": "topic-based threads"
+            },
+            {
+              "label": "free-flow chats"
+            },
+            {
+              "label": "action items summarized"
+            },
+            {
+              "label": "archive/clear often"
+            }
+          ]
+        },
+        {
+          "description": "Urgent vs non-urgent cues...",
+          "questions": [
+            {
+              "label": "label urgency in message"
+            },
+            {
+              "label": "emojis or caps for emphasis"
+            },
+            {
+              "label": "timestamps and deadlines"
+            },
+            {
+              "label": "little differentiation; chill"
+            }
+          ]
+        },
+        {
+          "description": "If we mismatch, best fix is...",
+          "questions": [
+            {
+              "label": "share norms + find overlap"
+            },
+            {
+              "label": "use seen/later signals"
+            },
+            {
+              "label": "split threads by topic"
+            },
+            {
+              "label": "reset expectations kindly"
+            }
+          ]
+        }
+      ]
+    },
+    "greenBeigeRedFlagsFilterTest": {
+      "title": "Green/Beige/Red Flags Filter",
+      "description": "",
+      "traits": [
+        {
+          "title": "Green-Flag Focus",
+          "description": "## Orientation\nYou notice and prioritize healthy patterns and strengths.\n\n### Markers\n- Repair after conflict\n- Accountability and kindness\n\n### Tips\n- Keep celebrating prosocial signals\n- Name what works to reinforce it\n"
+        },
+        {
+          "title": "Beige-Balanced",
+          "description": "## Orientation\nYou weigh context and neutrality before judging.\n\n### Markers\n- Logistics care, consistency\n- Curiosity before conclusions\n\n### Tips\n- Use \"needs + request\" when ambiguous\n- Track patterns over snapshots\n"
+        },
+        {
+          "title": "Red-Flag Sensitive",
+          "description": "## Orientation\nYou quickly spot risk patterns and act to protect yourself.\n\n### Markers\n- Coercion, contempt, secrecy\n- Ghosting, benching patterns\n\n### Tips\n- Trust early signals\n- Exit cleanly when needed\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Green/Beige/Red Flags Filter\nDefine what you rate as green, beige, and red—for you.\n\n## Why it helps\n- Faster pattern recognition\n- Clearer boundaries and asks"
+        },
+        {
+          "description": "Early in dating, I mostly look for...",
+          "questions": [
+            {
+              "label": "kindness, consistency, curiosity"
+            },
+            {
+              "label": "neutrals—timing, lifestyle fit"
+            },
+            {
+              "label": "controlling or cruel patterns"
+            },
+            {
+              "label": "context over first impressions"
+            }
+          ]
+        },
+        {
+          "description": "When something feels off...",
+          "questions": [
+            {
+              "label": "I name it and see response"
+            },
+            {
+              "label": "I note it, gather more data"
+            },
+            {
+              "label": "I exit quickly"
+            },
+            {
+              "label": "I delay until patterns repeat"
+            }
+          ]
+        },
+        {
+          "description": "A strong green flag is...",
+          "questions": [
+            {
+              "label": "repair after conflict"
+            },
+            {
+              "label": "accountability for impact"
+            },
+            {
+              "label": "shared logistics care"
+            },
+            {
+              "label": "no benching/ghosting"
+            }
+          ]
+        },
+        {
+          "description": "A hard red flag is...",
+          "questions": [
+            {
+              "label": "cruelty, contempt, coercion"
+            },
+            {
+              "label": "secrecy and lying"
+            },
+            {
+              "label": "miscommunication once"
+            },
+            {
+              "label": "curiosity under stress"
+            }
+          ]
+        },
+        {
+          "description": "An amber (watch) flag for me is...",
+          "questions": [
+            {
+              "label": "inconsistency without accountability"
+            },
+            {
+              "label": "defensiveness when given feedback"
+            },
+            {
+              "label": "low effort over time"
+            },
+            {
+              "label": "unkindness to others"
+            }
+          ]
+        },
+        {
+          "description": "Green signals I want to prioritize...",
+          "questions": [
+            {
+              "label": "reliability under stress"
+            },
+            {
+              "label": "learning orientation"
+            },
+            {
+              "label": "delight and curiosity"
+            },
+            {
+              "label": "caring for logistics"
+            }
+          ]
+        },
+        {
+          "description": "Response to a red flag I choose is...",
+          "questions": [
+            {
+              "label": "name it and watch tightly"
+            },
+            {
+              "label": "set a hard boundary"
+            },
+            {
+              "label": "exit cleanly"
+            },
+            {
+              "label": "make a specific request and timeline"
+            }
+          ]
+        },
+        {
+          "description": "Most like me:",
+          "questions": [
+            {
+              "label": "I celebrate green flags constantly"
+            },
+            {
+              "label": "I balance and wait for patterns"
+            },
+            {
+              "label": "I'm sensitive to red and act fast"
+            },
+            {
+              "label": "depends on context and risk"
+            }
+          ]
+        }
+      ]
+    },
+    "mainCharacterEnergyMeterTest": {
+      "title": "Main Character Energy Meter",
+      "description": "",
+      "traits": [
+        {
+          "title": "Leader",
+          "description": "## Orientation\nYou naturally take the lead, self-advocate, and drive momentum.\n\n### Strengths\n- Initiative and clarity\n- Comfort with visibility\n\n### Growth\n- Invite collaboration and rotate roles\n- Balance drive with recovery\n"
+        },
+        {
+          "title": "Balanced",
+          "description": "## Orientation\nYou switch between leading and supporting as needed.\n\n### Strengths\n- Flexibility and situational awareness\n- Team-mindedness\n\n### Growth\n- Name role expectations early\n- Avoid over-functioning in gaps\n"
+        },
+        {
+          "title": "Supportive",
+          "description": "## Orientation\nYou enable others to shine and prefer behind-the-scenes.\n\n### Strengths\n- Stabilizing presence\n- Detail care\n\n### Growth\n- Practice visible asks and wins\n- Take low-stakes spotlight reps\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Main Character Energy Meter\nHow strongly you lead, self-advocate, and enjoy visibility."
+        },
+        {
+          "description": "In group plans, I...",
+          "questions": [
+            {
+              "label": "initiate and organize"
+            },
+            {
+              "label": "share lead and coordinate"
+            },
+            {
+              "label": "support and follow"
+            },
+            {
+              "label": "rotate roles naturally"
+            }
+          ]
+        },
+        {
+          "description": "Self-advocacy for me is...",
+          "questions": [
+            {
+              "label": "easy and comfortable"
+            },
+            {
+              "label": "okay when needed"
+            },
+            {
+              "label": "hard—I avoid attention"
+            },
+            {
+              "label": "context-dependent"
+            }
+          ]
+        },
+        {
+          "description": "Spotlight and visibility feel...",
+          "questions": [
+            {
+              "label": "energizing"
+            },
+            {
+              "label": "fine in doses"
+            },
+            {
+              "label": "draining—I prefer low profile"
+            },
+            {
+              "label": "good to share with others"
+            }
+          ]
+        },
+        {
+          "description": "On tough projects, I typically...",
+          "questions": [
+            {
+              "label": "drive the plot forward"
+            },
+            {
+              "label": "co-lead when needed"
+            },
+            {
+              "label": "anchor the team quietly"
+            },
+            {
+              "label": "switch roles fluidly"
+            }
+          ]
+        },
+        {
+          "description": "My decision-making style...",
+          "questions": [
+            {
+              "label": "fast, decisive"
+            },
+            {
+              "label": "consult then choose"
+            },
+            {
+              "label": "enable chosen path"
+            },
+            {
+              "label": "iterate with feedback"
+            }
+          ]
+        },
+        {
+          "description": "Feedback reception...",
+          "questions": [
+            {
+              "label": "I seek feedback often"
+            },
+            {
+              "label": "selective sources"
+            },
+            {
+              "label": "cautious; prefer private notes"
+            },
+            {
+              "label": "public feedback is fine"
+            }
+          ]
+        },
+        {
+          "description": "Energy management...",
+          "questions": [
+            {
+              "label": "front-load and recover"
+            },
+            {
+              "label": "steady pace"
+            },
+            {
+              "label": "support others' pace"
+            },
+            {
+              "label": "sprint cycles"
+            }
+          ]
+        },
+        {
+          "description": "Most like me:",
+          "questions": [
+            {
+              "label": "lead by default"
+            },
+            {
+              "label": "mix leadership with support"
+            },
+            {
+              "label": "prefer backing roles"
+            },
+            {
+              "label": "context decides"
+            }
+          ]
+        }
+      ]
+    },
+    "typeABBalanceTest": {
+      "title": "Type A / Type B Balance",
+      "description": "",
+      "traits": [
+        {
+          "title": "Type A",
+          "description": "## Orientation\nHigh pace, structure, and outcome focus.\n\n### Strengths\n- Drive and planning\n- Clear ownership\n\n### Growth\n- Add slack and buffers\n- Protect recovery time\n"
+        },
+        {
+          "title": "Balanced",
+          "description": "## Orientation\nMix of planning and ease depending on stakes.\n\n### Strengths\n- Flexible execution\n- Context-driven pace\n\n### Growth\n- Make decision rules explicit\n- Avoid drift via checkpoints\n"
+        },
+        {
+          "title": "Type B",
+          "description": "## Orientation\nEasygoing pace, adaptive flow, low pressure by default.\n\n### Strengths\n- Calm and creativity\n- Stress resilience\n\n### Growth\n- Add light structure for deadlines\n- Use timeboxing to start\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Type A / Type B Balance\nYour pace, control, and pressure preferences in daily life."
+        },
+        {
+          "description": "Deadlines make me...",
+          "questions": [
+            {
+              "label": "push hard and plan tightly"
+            },
+            {
+              "label": "focus then relax after"
+            },
+            {
+              "label": "glide; I don't over-stress"
+            },
+            {
+              "label": "batch work in calm blocks"
+            }
+          ]
+        },
+        {
+          "description": "Control preference...",
+          "questions": [
+            {
+              "label": "high—own the plan"
+            },
+            {
+              "label": "shared control"
+            },
+            {
+              "label": "low—prefer collaboration"
+            },
+            {
+              "label": "delegate and trust"
+            }
+          ]
+        },
+        {
+          "description": "Daily structure...",
+          "questions": [
+            {
+              "label": "detailed schedule"
+            },
+            {
+              "label": "time blocks + flex"
+            },
+            {
+              "label": "loose plan, adapt as I go"
+            },
+            {
+              "label": "mostly spontaneous"
+            }
+          ]
+        },
+        {
+          "description": "Under pressure I...",
+          "questions": [
+            {
+              "label": "intensify and drive outcomes"
+            },
+            {
+              "label": "focus then exhale"
+            },
+            {
+              "label": "slow down to think clearly"
+            },
+            {
+              "label": "keep calm rhythms"
+            }
+          ]
+        },
+        {
+          "description": "Prioritization style...",
+          "questions": [
+            {
+              "label": "urgent/impact first"
+            },
+            {
+              "label": "mix impact with energy"
+            },
+            {
+              "label": "follow energy and interest"
+            },
+            {
+              "label": "sequence + buffers"
+            }
+          ]
+        },
+        {
+          "description": "Multitasking...",
+          "questions": [
+            {
+              "label": "parallel streams"
+            },
+            {
+              "label": "single-task deeply"
+            },
+            {
+              "label": "batch by context"
+            },
+            {
+              "label": "toggle with breaks"
+            }
+          ]
+        },
+        {
+          "description": "Recovery style...",
+          "questions": [
+            {
+              "label": "off-switch after sprint"
+            },
+            {
+              "label": "micro-breaks often"
+            },
+            {
+              "label": "flow over strict breaks"
+            },
+            {
+              "label": "planned deload weeks"
+            }
+          ]
+        },
+        {
+          "description": "Delegation vs doing...",
+          "questions": [
+            {
+              "label": "do it to ensure quality"
+            },
+            {
+              "label": "delegate with check-ins"
+            },
+            {
+              "label": "trust and let go"
+            },
+            {
+              "label": "pair once then hand off"
+            }
+          ]
+        }
+      ]
+    },
+    "socialBatteryGaugeTest": {
+      "title": "Social Battery Gauge",
+      "description": "",
+      "traits": [
+        {
+          "title": "Introvert",
+          "description": "## Baseline\nRecharge solo or in low-stim settings; depth over breadth.\n\n### Strengths\n- Focus and deep connection\n- Thoughtful presence\n\n### Tips\n- Protect recharge windows\n- Choose depth-first plans\n"
+        },
+        {
+          "title": "Ambivert",
+          "description": "## Baseline\nEnjoy both solo and social time; balance is key.\n\n### Strengths\n- Flexibility across contexts\n- Adaptive energy\n\n### Tips\n- Calendar anchor + free day\n- Mix group and 1:1 time\n"
+        },
+        {
+          "title": "Extrovert",
+          "description": "## Baseline\nGain energy from groups and active environments.\n\n### Strengths\n- Momentum and network building\n- Enthusiasm and warmth\n\n### Tips\n- Add recovery sprints\n- Keep an eye on over-scheduling\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Social Battery Gauge\nHow you recharge and what drains you fastest."
+        },
+        {
+          "description": "Best recharge...",
+          "questions": [
+            {
+              "label": "solo time or 1-on-1"
+            },
+            {
+              "label": "mix: solo + small group"
+            },
+            {
+              "label": "group hangs energize me"
+            },
+            {
+              "label": "outdoor walk with a friend"
+            }
+          ]
+        },
+        {
+          "description": "What drains you fastest?",
+          "questions": [
+            {
+              "label": "noise and large crowds"
+            },
+            {
+              "label": "not much, unless very long"
+            },
+            {
+              "label": "rapid social switching"
+            },
+            {
+              "label": "constant small talk"
+            }
+          ]
+        },
+        {
+          "description": "Ideal weekend vibe...",
+          "questions": [
+            {
+              "label": "read, create, or rest"
+            },
+            {
+              "label": "one plan, one chill day"
+            },
+            {
+              "label": "events and people"
+            },
+            {
+              "label": "walks + coffee chats"
+            }
+          ]
+        },
+        {
+          "description": "After a busy week I...",
+          "questions": [
+            {
+              "label": "cocoon and recharge solo"
+            },
+            {
+              "label": "see selected friends"
+            },
+            {
+              "label": "seek energizing meetups"
+            },
+            {
+              "label": "long call with a bestie"
+            }
+          ]
+        },
+        {
+          "description": "Event length tolerance...",
+          "questions": [
+            {
+              "label": "short and sweet"
+            },
+            {
+              "label": "a couple of hours"
+            },
+            {
+              "label": "long sessions are great"
+            },
+            {
+              "label": "rotate: one long, one short"
+            }
+          ]
+        },
+        {
+          "description": "Ideal hang size...",
+          "questions": [
+            {
+              "label": "1-on-1"
+            },
+            {
+              "label": "2–4 people"
+            },
+            {
+              "label": "bigger group"
+            },
+            {
+              "label": "varies by mood"
+            }
+          ]
+        },
+        {
+          "description": "Noise tolerance...",
+          "questions": [
+            {
+              "label": "prefer quiet"
+            },
+            {
+              "label": "moderate is fine"
+            },
+            {
+              "label": "love lively spaces"
+            },
+            {
+              "label": "depends on activity"
+            }
+          ]
+        },
+        {
+          "description": "Recovery ritual...",
+          "questions": [
+            {
+              "label": "read/solo craft"
+            },
+            {
+              "label": "walk + one call"
+            },
+            {
+              "label": "another energizing event"
+            },
+            {
+              "label": "music or ambient reset"
+            }
+          ]
+        }
+      ]
+    },
+    "peoplePleasingTendenciesTest": {
+      "title": "People-Pleasing Tendencies (Fawn)",
+      "description": "",
+      "traits": [
+        {
+          "title": "Low",
+          "description": "## Baseline\nYou rarely trade your needs for harmony; friction is tolerated.\n\n### Strengths\n- Directness and clarity\n- Self-respect and boundaries\n\n### Tips\n- Keep kindness + firmness paired\n- Invite others' needs explicitly\n"
+        },
+        {
+          "title": "Moderate",
+          "description": "## Baseline\nYou sometimes over-give or delay no's. Awareness helps recalibrate.\n\n### Signals\n- Subtle resentment after yes\n- Delayed boundary setting\n\n### Tips\n- Use tiny, early no's\n- Track \"should\" spikes\n"
+        },
+        {
+          "title": "High",
+          "description": "## Baseline\nYou often sideline needs to avoid conflict or rejection.\n\n### Signals\n- Chronic over-commitment\n- Anxiety around others' feelings\n\n### Tips\n- Script gentle no's in advance\n- Practice tolerating short-term discomfort\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# People-Pleasing Tendencies (Fawn)\nWhere you trade needs for harmony and how often."
+        },
+        {
+          "description": "When asked for a favor I can't do...",
+          "questions": [
+            {
+              "label": "I say no kindly"
+            },
+            {
+              "label": "I say maybe and feel torn"
+            },
+            {
+              "label": "I say yes and resent later"
+            },
+            {
+              "label": "I delay and hope it passes"
+            }
+          ]
+        },
+        {
+          "description": "In conflicts I...",
+          "questions": [
+            {
+              "label": "state my view calmly"
+            },
+            {
+              "label": "smooth things quickly"
+            },
+            {
+              "label": "fold to keep peace"
+            },
+            {
+              "label": "joke or deflect"
+            }
+          ]
+        },
+        {
+          "description": "Receiving feedback feels...",
+          "questions": [
+            {
+              "label": "useful even if tough"
+            },
+            {
+              "label": "tense—I overthink"
+            },
+            {
+              "label": "threatening—I appease"
+            },
+            {
+              "label": "I shut down or fawn"
+            }
+          ]
+        },
+        {
+          "description": "I want to practice...",
+          "questions": [
+            {
+              "label": "saying no sooner"
+            },
+            {
+              "label": "clearer boundaries"
+            },
+            {
+              "label": "naming my needs directly"
+            },
+            {
+              "label": "checking resentment early"
+            }
+          ]
+        },
+        {
+          "description": "Most likely people-pleasing trigger...",
+          "questions": [
+            {
+              "label": "authority or power gaps"
+            },
+            {
+              "label": "close friend or partner"
+            },
+            {
+              "label": "many people watching"
+            },
+            {
+              "label": "strangers or service contexts"
+            }
+          ]
+        },
+        {
+          "description": "Tell-tale signs I'm fawning...",
+          "questions": [
+            {
+              "label": "body says no but mouth says yes"
+            },
+            {
+              "label": "excess apologies"
+            },
+            {
+              "label": "fast agreement without needs"
+            },
+            {
+              "label": "resentment creep"
+            }
+          ]
+        },
+        {
+          "description": "Repair after over-giving...",
+          "questions": [
+            {
+              "label": "name it and reset"
+            },
+            {
+              "label": "take one boundary step"
+            },
+            {
+              "label": "ignore and push through"
+            },
+            {
+              "label": "delay until it explodes"
+            }
+          ]
+        },
+        {
+          "description": "Best anti-fawn script...",
+          "questions": [
+            {
+              "label": "'I need time to think'"
+            },
+            {
+              "label": "'I can't do X; I can do Y'"
+            },
+            {
+              "label": "'No' without over-explaining"
+            },
+            {
+              "label": "follow-up to reinforce"
+            }
+          ]
+        }
+      ]
+    },
+    "spontaneityVsPlanningDialTest": {
+      "title": "Spontaneity vs Planning Dial",
+      "description": "",
+      "traits": [
+        {
+          "title": "Spontaneous",
+          "description": "## Orientation\nYou thrive with freedom and last-minute flow.\n\n### Strengths\n- Creativity and responsiveness\n- Enjoy discovery\n\n### Tips\n- Add one anchor to reduce friction\n- Keep backup options lightweight\n"
+        },
+        {
+          "title": "Balanced",
+          "description": "## Orientation\nYou like light structure with room for surprises.\n\n### Strengths\n- Adaptable planning\n- Good trade-off sense\n\n### Tips\n- Protect anchors in the calendar\n- Leave intentional white space\n"
+        },
+        {
+          "title": "Planner",
+          "description": "## Orientation\nYou prefer structure and advance planning for ease.\n\n### Strengths\n- Predictability and preparedness\n- Lower decision fatigue\n\n### Tips\n- Build flex buffers\n- Try small spontaneous reps\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Spontaneity vs Planning Dial\nFind your sweet spot between last-minute flow and structure."
+        },
+        {
+          "description": "For a weekend plan I prefer...",
+          "questions": [
+            {
+              "label": "last-minute choices"
+            },
+            {
+              "label": "one anchor plan + flex"
+            },
+            {
+              "label": "clear itinerary"
+            },
+            {
+              "label": "hold options, decide day-of"
+            }
+          ]
+        },
+        {
+          "description": "When schedules change...",
+          "questions": [
+            {
+              "label": "I'm excited to improvise"
+            },
+            {
+              "label": "fine if I keep one anchor"
+            },
+            {
+              "label": "I feel stress—prefer predictability"
+            },
+            {
+              "label": "I swap plans strategically"
+            }
+          ]
+        },
+        {
+          "description": "Travel planning style...",
+          "questions": [
+            {
+              "label": "wing it with loose ideas"
+            },
+            {
+              "label": "time blocks + room to roam"
+            },
+            {
+              "label": "detailed plan and bookings"
+            },
+            {
+              "label": "backup options prepared"
+            }
+          ]
+        },
+        {
+          "description": "Planning tools I rely on...",
+          "questions": [
+            {
+              "label": "calendar blocks"
+            },
+            {
+              "label": "checklists"
+            },
+            {
+              "label": "loose map and vibes"
+            },
+            {
+              "label": "anchors + open slots"
+            }
+          ]
+        },
+        {
+          "description": "Surprise invitations...",
+          "questions": [
+            {
+              "label": "often yes—love it"
+            },
+            {
+              "label": "maybe—depends on energy"
+            },
+            {
+              "label": "usually no—need notice"
+            },
+            {
+              "label": "small surprises only"
+            }
+          ]
+        },
+        {
+          "description": "Calendaring style...",
+          "questions": [
+            {
+              "label": "book it up early"
+            },
+            {
+              "label": "anchor + white space"
+            },
+            {
+              "label": "lightly penciled; decide later"
+            },
+            {
+              "label": "theme days, then freestyle"
+            }
+          ]
+        },
+        {
+          "description": "Decisions with friends...",
+          "questions": [
+            {
+              "label": "vote then commit"
+            },
+            {
+              "label": "whoever has energy decides"
+            },
+            {
+              "label": "rotate decision lead"
+            },
+            {
+              "label": "mix plan + vibe"
+            }
+          ]
+        },
+        {
+          "description": "Backup plans...",
+          "questions": [
+            {
+              "label": "none—embrace detours"
+            },
+            {
+              "label": "list of alternates"
+            },
+            {
+              "label": "one backup is enough"
+            },
+            {
+              "label": "switch contexts entirely"
+            }
+          ]
+        }
+      ]
+    },
+    "riskAppetiteCheckTest": {
+      "title": "Risk Appetite Check",
+      "description": "",
+      "traits": [
+        {
+          "title": "Low",
+          "description": "## Baseline\nPrefer safety, proven paths, and measured change.\n\n### Strengths\n- Stability and endurance\n- Downside protection\n\n### Tips\n- Take tiny experimental reps\n- Use capped-risk trials\n"
+        },
+        {
+          "title": "Moderate",
+          "description": "## Baseline\nCalculated risks with safeguards and reviews.\n\n### Strengths\n- Balanced portfolios\n- Sensible timing\n\n### Tips\n- Define stop-loss and success metrics\n- Review cadence (monthly/quarterly)\n"
+        },
+        {
+          "title": "High",
+          "description": "## Baseline\nComfortable with bold bets for outsized upside.\n\n### Strengths\n- Momentum and innovation\n- Tolerance for ambiguity\n\n### Tips\n- Add risk caps and contingencies\n- Track downside explicitly\n"
+        }
+      ],
+      "pages": [
+        {
+          "description": "# Risk Appetite Check\nHow you approach risk across money, career, relationships, and health."
+        },
+        {
+          "description": "Investing choices...",
+          "questions": [
+            {
+              "label": "safe, diversified"
+            },
+            {
+              "label": "mix of safe and speculative"
+            },
+            {
+              "label": "bold, high-upside"
+            },
+            {
+              "label": "learn before increasing risk"
+            }
+          ]
+        },
+        {
+          "description": "Career moves...",
+          "questions": [
+            {
+              "label": "stable growth path"
+            },
+            {
+              "label": "calculated jumps"
+            },
+            {
+              "label": "venture and build"
+            },
+            {
+              "label": "switch if upside is clear"
+            }
+          ]
+        },
+        {
+          "description": "Relationships...",
+          "questions": [
+            {
+              "label": "slow and steady"
+            },
+            {
+              "label": "open but paced"
+            },
+            {
+              "label": "leap when it feels right"
+            },
+            {
+              "label": "strong boundaries first"
+            }
+          ]
+        },
+        {
+          "description": "Health decisions...",
+          "questions": [
+            {
+              "label": "proven methods"
+            },
+            {
+              "label": "trial with research"
+            },
+            {
+              "label": "experiment early"
+            },
+            {
+              "label": "seek coach before change"
+            }
+          ]
+        },
+        {
+          "description": "Learning bets...",
+          "questions": [
+            {
+              "label": "free/low-cost first"
+            },
+            {
+              "label": "mix small bets + one big"
+            },
+            {
+              "label": "go big to compress time"
+            },
+            {
+              "label": "shadow then invest"
+            }
+          ]
+        },
+        {
+          "description": "Time allocation...",
+          "questions": [
+            {
+              "label": "core work first"
+            },
+            {
+              "label": "20% experiments"
+            },
+            {
+              "label": "40% bold bets seasonally"
+            },
+            {
+              "label": "spike with guardrails"
+            }
+          ]
+        },
+        {
+          "description": "Experiment cycle...",
+          "questions": [
+            {
+              "label": "short cycles + reviews"
+            },
+            {
+              "label": "long cycles with patience"
+            },
+            {
+              "label": "many small shots on goal"
+            },
+            {
+              "label": "few, focused bets"
+            }
+          ]
+        },
+        {
+          "description": "Downside planning...",
+          "questions": [
+            {
+              "label": "insurance and cash buffers"
+            },
+            {
+              "label": "risk caps and stop-loss"
+            },
+            {
+              "label": "minimal protection"
+            },
+            {
+              "label": "explicit Plan B/C"
+            }
+          ]
+        }
+      ]
+    },
+    "wellbeingAssessment": {
+      "title": "Μental well-being",
+      "description": "",
+      "pages": [
+        {
+          "description": "This test helps you look into your emotional and physical state over the past two weeks. \n # It shows:\n• how much you feel cheerful and calm in your everyday life,\n• whether you have enough energy for things that matter to you,\n• how filled your life is with things that inspire you,\n• which areas currently need more attention and support.\n\nIn the end, the test gives you a chance to see your current level of inner resources and understand what specifically might help restore balance. It's not about diagnosis or judgment — it's about awareness of your state, so you can care for yourself more consciously."
+        },
+        {
+          "description": "Over the past 2 weeks, I...\nfelt cheerful and in good spirits",
+          "questions": [
+            {
+              "label": "All of the time"
+            },
+            {
+              "label": "Most of the time"
+            },
+            {
+              "label": "More than half of the time"
+            },
+            {
+              "label": "Less than half of the time"
+            },
+            {
+              "label": "Sometimes"
+            },
+            {
+              "label": "Not at all"
+            }
+          ]
+        },
+        {
+          "description": "Over the past 2 weeks, I...\nfelt calm and relaxed",
+          "questions": [
+            {
+              "label": "All of the time"
+            },
+            {
+              "label": "Most of the time"
+            },
+            {
+              "label": "More than half of the time"
+            },
+            {
+              "label": "Less than half of the time"
+            },
+            {
+              "label": "Sometimes"
+            },
+            {
+              "label": "Not at all"
+            }
+          ]
+        },
+        {
+          "description": "Over the past 2 weeks, I...\nfelt active and full of energy",
+          "questions": [
+            {
+              "label": "All of the time"
+            },
+            {
+              "label": "Most of the time"
+            },
+            {
+              "label": "More than half of the time"
+            },
+            {
+              "label": "Less than half of the time"
+            },
+            {
+              "label": "Sometimes"
+            },
+            {
+              "label": "Not at all"
+            }
+          ]
+        },
+        {
+          "description": "Over the past 2 weeks, I...\nwoke up feeling fresh and rested",
+          "questions": [
+            {
+              "label": "All of the time"
+            },
+            {
+              "label": "Most of the time"
+            },
+            {
+              "label": "More than half of the time"
+            },
+            {
+              "label": "Less than half of the time"
+            },
+            {
+              "label": "Sometimes"
+            },
+            {
+              "label": "Not at all"
+            }
+          ]
+        },
+        {
+          "description": "Over the past 2 weeks, I...\nhad daily life filled with interesting things",
+          "questions": [
+            {
+              "label": "All of the time"
+            },
+            {
+              "label": "Most of the time"
+            },
+            {
+              "label": "More than half of the time"
+            },
+            {
+              "label": "Less than half of the time"
+            },
+            {
+              "label": "Sometimes"
+            },
+            {
+              "label": "Not at all"
+            }
+          ]
+        }
+      ],
+      "overall": {
+        "excellent": {
+          "title": "Excellent Level",
+          "intro": "Your results indicate a high level of psychological well-being. You are in a state of inner harmony and life satisfaction."
+        },
+        "good": {
+          "title": "Good Level",
+          "intro": "Overall, you are feeling well, but there is room for improvement. Your well-being is stable, however some aspects require attention."
+        },
+        "moderate": {
+          "title": "Moderate Level",
+          "intro": "Your results suggest there is room for growth in your well-being There are clear signals that it's worth paying attention to your mental and physical health."
+        },
+        "low": {
+          "title": "Lower Than Usual Level",
+          "intro": "The results indicate that things are not easy for you right now. If this continues for more than 2 weeks and affects your daily life, it may be helpful to talk about your condition with a psychologist or psychotherapist."
+        },
+        "critical": {
+          "title": "Very Low Level",
+          "intro": "Your answers indicate noticeable difficulties. Support from a qualified specialist can help you restore your resources and find an effective action plan."
+        }
+      },
+      "clusters": {
+        "emotional": {
+          "high": "Your emotional state is stable and positive. You manage your mood well and maintain inner peace.",
+          "medium": "Emotional balance is periodically disrupted. Mood fluctuates, and it's not always possible to maintain calm in everyday situations.",
+          "low": "Maintaining a positive mood and inner peace is difficult right now. The emotional sphere may require additional attention and support.",
+          "tips": [
+            "Practice daily gratitude: write down 3 positive moments of the day",
+            "Try breathing techniques for quick calming (stop if you feel dizzy)",
+            "Try to set a daily social media limit (for example, 20-30 minutes)",
+            "Talk to a close person about your feelings",
+            "Consider consulting with a psychologist"
+          ]
+        },
+        "physical": {
+          "high": "Your energy levels and sleep quality are high. Your physical resources allow you to be productive and active.",
+          "medium": "Your energy levels and sleep quality fluctuate periodically. This may indicate disruptions in routine or overload.",
+          "low": "Your answers point to fatigue and possible sleep difficulties that affect quality of life. Physical resources need recovery",
+          "tips": [
+            "Go to bed and wake up at about the same time each day",
+            "void caffeine after 2:00 PM and gadgets an hour before bed",
+            "Add 20–30 minutes of daily physical activity (if there are no contraindications)",
+            "Consider consulting a doctor if fatigue persists",
+            "Create a bedtime ritual (warm shower, reading, meditation)"
+          ]
+        },
+        "engagement": {
+          "high": "Your life is filled with meaning and engaging activities. You feel involved and motivated in everyday matters.",
+          "medium": "Interest in daily activities varies: periods of enthusiasm alternate with decreased motivation. You are searching for new sources of inspiration.",
+          "low": "It’s difficult to find satisfaction in things that used to bring joy. Life feels less rich and interesting.",
+          "tips": [
+            "Set aside 1 hour per week for a new hobby or skill",
+            "Plan something pleasant every day, even if it's small things",
+            "Return to activities that once brought joy",
+            "Find a community of like-minded people (online or offline)",
+            "Try volunteering or helping others"
+          ]
+        }
+      },
+      "warnings": {
+        "sleep": "💤 Your answers suggest possible sleep difficulties. If this persists or worsens, consulting a doctor can help identify causes and solutions.",
+        "noInterest": "💭 Decreased interest in daily activities may be a reaction to stress or indicate a need for support. If this feeling doesn't pass, a psychologist or psychotherapist can help.",
+        "needSupport": "🚨 If there is an immediate risk to yourself or others, contact local emergency services right away. 🤝 If you need urgent emotional support, reach out to a crisis hotline in your country or to the nearest emergency service."
+      }
+    }
+  }
+}

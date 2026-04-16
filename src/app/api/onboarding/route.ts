@@ -15,6 +15,13 @@ interface PostHogQueryResponse {
   };
 }
 
+function getVersionFilter(analyticsVersion: "v1" | "v2"): string {
+  if (analyticsVersion === "v2") {
+    return `JSONExtractString(properties,'analytics_version') = 'v2'`;
+  }
+  return `(JSONExtractString(properties,'analytics_version') != 'v2' OR JSONExtractString(properties,'analytics_version') = '')`;
+}
+
 async function queryPostHogArray(
   query: string
 ): Promise<Array<Array<number | string>>> {
@@ -211,9 +218,12 @@ function buildOnboardingQuery(
   startIso: string,
   endIso: string,
   action: "started" | "completed",
-  environment: string = "production"
+  environment: string = "production",
+  analyticsVersion: "v1" | "v2" = "v2"
 ): string {
-  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}'`;
+  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
+    analyticsVersion
+  )}`;
 
   if (action === "started") {
     return `SELECT count() AS value FROM events WHERE event = 'onboarding_step' AND JSONExtractString(properties,'action') = 'started' AND ${baseFilters}`;
@@ -226,9 +236,12 @@ function buildOnboardingQuery(
 function buildDurationQuery(
   startIso: string,
   endIso: string,
-  environment: string = "production"
+  environment: string = "production",
+  analyticsVersion: "v1" | "v2" = "v2"
 ): string {
-  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}'`;
+  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
+    analyticsVersion
+  )}`;
   return `SELECT avg(toFloatOrDefault(JSONExtractString(properties,'total_duration_seconds'), 0.0)) AS value FROM events WHERE event = 'onboarding_step' AND JSONExtractString(properties,'action') = 'completed' AND ${baseFilters}`;
 }
 
@@ -237,9 +250,12 @@ function buildPageViewQuery(
   endIso: string,
   pageName: string,
   premiumActive?: boolean,
-  environment: string = "production"
+  environment: string = "production",
+  analyticsVersion: "v1" | "v2" = "v2"
 ): string {
-  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}'`;
+  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
+    analyticsVersion
+  )}`;
 
   let premiumFilter = "";
   if (premiumActive !== undefined) {
@@ -257,11 +273,34 @@ function buildPageViewQuery(
   return `SELECT uniqExact(JSONExtractString(properties,'session_id')) AS value FROM events WHERE event = 'onboarding_step' AND (JSONExtractString(properties,'action') = 'viewed' OR JSONExtractString(properties,'action') = 'completed') AND JSONExtractString(properties,'page_name') = '${pageName}' AND ${baseFilters}${premiumFilter}`;
 }
 
+/**
+ * Order matches `pagesSteps` in jar/components/common/v2/Onboarding/Onboarding.tsx
+ * (second `ps2` step omitted — same page_name as first).
+ */
+const ONBOARDING_V2_PAGE_ORDER = [
+  "hello",
+  "name",
+  "1",
+  "2",
+  "summaryConclusion",
+  "summaryConclusionQuestion",
+  "summaryAI",
+  "ps2",
+  "1.2",
+  "ps1",
+  "noPremium1",
+  "notification",
+  "tasks",
+] as const;
+
 export async function GET(request: NextRequest) {
   try {
     const environment = "production";
     const searchParams = request.nextUrl.searchParams;
     const timeRange = searchParams.get("timeRange") || "7d";
+    const analyticsVersionParam = searchParams.get("analyticsVersion") || "v2";
+    const analyticsVersion: "v1" | "v2" =
+      analyticsVersionParam === "v1" ? "v1" : "v2";
 
     // Validate timeRange
     if (!["7d", "30d", "90d"].includes(timeRange)) {
@@ -280,18 +319,21 @@ export async function GET(request: NextRequest) {
       currentWindow.start.toISOString(),
       currentWindow.end.toISOString(),
       "started",
-      environment
+      environment,
+      analyticsVersion
     );
     const completedQuery = buildOnboardingQuery(
       currentWindow.start.toISOString(),
       currentWindow.end.toISOString(),
       "completed",
-      environment
+      environment,
+      analyticsVersion
     );
     const durationQuery = buildDurationQuery(
       currentWindow.start.toISOString(),
       currentWindow.end.toISOString(),
-      environment
+      environment,
+      analyticsVersion
     );
 
     // Build queries for comparison period
@@ -299,159 +341,31 @@ export async function GET(request: NextRequest) {
       comparisonWindow.start.toISOString(),
       comparisonWindow.end.toISOString(),
       "started",
-      environment
+      environment,
+      analyticsVersion
     );
     const completedComparisonQuery = buildOnboardingQuery(
       comparisonWindow.start.toISOString(),
       comparisonWindow.end.toISOString(),
       "completed",
-      environment
+      environment,
+      analyticsVersion
     );
     const durationComparisonQuery = buildDurationQuery(
       comparisonWindow.start.toISOString(),
       comparisonWindow.end.toISOString(),
-      environment
+      environment,
+      analyticsVersion
     );
 
-    // Build page view queries for current period
-    const baseFilters = `timestamp >= toDateTime('${currentWindow.start.toISOString()}','Europe/Warsaw') AND timestamp < toDateTime('${currentWindow.end.toISOString()}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}'`;
+    // Build trial data queries (shared v1 / v2)
+    const baseFiltersForTrials = `timestamp >= toDateTime('${currentWindow.start.toISOString()}','Europe/Warsaw') AND timestamp < toDateTime('${currentWindow.end.toISOString()}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
+      analyticsVersion
+    )}`;
 
-    // Common pages (for both flows)
-    const viewedHelloQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "hello",
-      undefined,
-      environment
-    );
-    const viewed1Query = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "1",
-      undefined,
-      environment
-    );
-    const viewed2Query = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "2",
-      undefined,
-      environment
-    );
-    const viewed3Query = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "3",
-      undefined,
-      environment
-    );
-    const viewedPs1Query = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "ps1",
-      undefined,
-      environment
-    );
-
-    // NO PREMIUM FLOW pages (premium_active = false)
-    const viewedNoPremium1_noPremiumQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "noPremium1",
-      false,
-      environment
-    );
-    const viewedNoPremium2_noPremiumQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "noPremium2",
-      false,
-      environment
-    );
-    const viewedBreathing_noPremiumQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "breathing",
-      false,
-      environment
-    );
-    const viewedDiary1_noPremiumQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "diary1",
-      false,
-      environment
-    );
-    const viewedQuestions1_noPremiumQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "questions1",
-      false,
-      environment
-    );
-    // Notification is common for both flows, so no premium filter
-    const viewedNotification_noPremiumQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "notification",
-      undefined,
-      environment
-    );
-    const viewedPs2_noPremiumQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "ps2",
-      false,
-      environment
-    );
-
-    // PREMIUM FLOW pages (premium_active = true)
-    const viewedPremium1Query = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "premium1",
-      true,
-      environment
-    );
-    const viewedPremium2Query = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "premium2",
-      true,
-      environment
-    );
-    const viewedPremium3Query = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "premium3",
-      true,
-      environment
-    );
-    const viewedSummaryQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "summary",
-      true,
-      environment
-    );
-    const viewedNoPremium1_premiumQuery = buildPageViewQuery(
-      currentWindow.start.toISOString(),
-      currentWindow.end.toISOString(),
-      "noPremium1",
-      true,
-      environment
-    );
-    // Notification is common for both flows, use the same query (already defined above)
-    const viewedNotification_premiumQuery = viewedNotification_noPremiumQuery;
-
-    // Build trial data queries
-    const baseFiltersForTrials = `timestamp >= toDateTime('${currentWindow.start.toISOString()}','Europe/Warsaw') AND timestamp < toDateTime('${currentWindow.end.toISOString()}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}'`;
-
-    // Query for paywall views
     const paywall1ViewsQuery = `SELECT count() AS value FROM events WHERE event = 'onboarding_paywall_action' AND JSONExtractString(properties,'action') = 'viewed' AND JSONExtractString(properties,'variant') = 'price1' AND ${baseFiltersForTrials}`;
     const paywall2ViewsQuery = `SELECT count() AS value FROM events WHERE event = 'onboarding_paywall_action' AND JSONExtractString(properties,'action') = 'viewed' AND JSONExtractString(properties,'variant') = 'price2' AND ${baseFiltersForTrials}`;
 
-    // Query for trial started by variant and period
     const trialStartedQuery = `
       SELECT
         JSONExtractString(properties,'variant') AS variant,
@@ -468,7 +382,6 @@ export async function GET(request: NextRequest) {
       ORDER BY variant, period
     `;
 
-    // Query for purchase success by variant and period
     const purchaseSuccessQuery = `
       SELECT
         JSONExtractString(properties,'variant') AS variant,
@@ -485,66 +398,324 @@ export async function GET(request: NextRequest) {
       ORDER BY variant, period
     `;
 
-    // Execute all queries in parallel
-    const [
-      started,
-      startedComparison,
-      completed,
-      completedComparison,
-      avgDuration,
-      avgDurationComparison,
-      viewedHello,
-      viewed1,
-      viewed2,
-      viewed3,
-      viewedPs1,
-      viewedNoPremium1_noPremium,
-      viewedNoPremium2_noPremium,
-      viewedBreathing_noPremium,
-      viewedDiary1_noPremium,
-      viewedQuestions1_noPremium,
-      viewedNotification_noPremium,
-      viewedPs2_noPremium,
-      viewedPremium1,
-      viewedPremium2,
-      viewedPremium3,
-      viewedSummary,
-      viewedNoPremium1_premium,
-      paywall1Views,
-      paywall2Views,
-      trialStartedResults,
-      purchaseSuccessResults,
-    ] = await Promise.all([
-      queryPostHog(startedQuery),
-      queryPostHog(startedComparisonQuery),
-      queryPostHog(completedQuery),
-      queryPostHog(completedComparisonQuery),
-      queryPostHog(durationQuery),
-      queryPostHog(durationComparisonQuery),
-      queryPostHog(viewedHelloQuery),
-      queryPostHog(viewed1Query),
-      queryPostHog(viewed2Query),
-      queryPostHog(viewed3Query),
-      queryPostHog(viewedPs1Query),
-      queryPostHog(viewedNoPremium1_noPremiumQuery),
-      queryPostHog(viewedNoPremium2_noPremiumQuery),
-      queryPostHog(viewedBreathing_noPremiumQuery),
-      queryPostHog(viewedDiary1_noPremiumQuery),
-      queryPostHog(viewedQuestions1_noPremiumQuery),
-      queryPostHog(viewedNotification_noPremiumQuery),
-      queryPostHog(viewedPs2_noPremiumQuery),
-      queryPostHog(viewedPremium1Query),
-      queryPostHog(viewedPremium2Query),
-      queryPostHog(viewedPremium3Query),
-      queryPostHog(viewedSummaryQuery),
-      queryPostHog(viewedNoPremium1_premiumQuery),
-      queryPostHog(paywall1ViewsQuery),
-      queryPostHog(paywall2ViewsQuery),
-      queryPostHogArray(trialStartedQuery),
-      queryPostHogArray(purchaseSuccessQuery),
-    ]);
+    const curStart = currentWindow.start.toISOString();
+    const curEnd = currentWindow.end.toISOString();
 
-    // Calculate percentage changes
+    let started: number;
+    let startedComparison: number;
+    let completed: number;
+    let completedComparison: number;
+    let avgDuration: number;
+    let avgDurationComparison: number;
+    let paywall1Views: number;
+    let paywall2Views: number;
+    let trialStartedResults: Array<Array<number | string>>;
+    let purchaseSuccessResults: Array<Array<number | string>>;
+
+    let pagesData: {
+      noPremium?: Record<string, number>;
+      premium?: Record<string, number>;
+      flow?: Record<string, number>;
+    };
+
+    if (analyticsVersion === "v2") {
+      const v2PageQueries = ONBOARDING_V2_PAGE_ORDER.map((pageName) =>
+        buildPageViewQuery(
+          curStart,
+          curEnd,
+          pageName,
+          undefined,
+          environment,
+          analyticsVersion
+        )
+      );
+
+      const combined = await Promise.all([
+        queryPostHog(startedQuery),
+        queryPostHog(startedComparisonQuery),
+        queryPostHog(completedQuery),
+        queryPostHog(completedComparisonQuery),
+        queryPostHog(durationQuery),
+        queryPostHog(durationComparisonQuery),
+        ...v2PageQueries.map((q) => queryPostHog(q)),
+        queryPostHog(paywall1ViewsQuery),
+        queryPostHog(paywall2ViewsQuery),
+        queryPostHogArray(trialStartedQuery),
+        queryPostHogArray(purchaseSuccessQuery),
+      ]);
+
+      started = combined[0] as number;
+      startedComparison = combined[1] as number;
+      completed = combined[2] as number;
+      completedComparison = combined[3] as number;
+      avgDuration = combined[4] as number;
+      avgDurationComparison = combined[5] as number;
+
+      const nPages = ONBOARDING_V2_PAGE_ORDER.length;
+      const pageSlice = combined.slice(6, 6 + nPages);
+      paywall1Views = combined[6 + nPages] as number;
+      paywall2Views = combined[7 + nPages] as number;
+      trialStartedResults = combined[8 + nPages] as Array<
+        Array<number | string>
+      >;
+      purchaseSuccessResults = combined[9 + nPages] as Array<
+        Array<number | string>
+      >;
+
+      pagesData = {
+        flow: Object.fromEntries(
+          ONBOARDING_V2_PAGE_ORDER.map((p, i) => [
+            p,
+            Math.round(Number(pageSlice[i]) || 0),
+          ])
+        ),
+      };
+    } else {
+      const viewedHelloQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "hello",
+        undefined,
+        environment,
+        analyticsVersion
+      );
+      const viewed1Query = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "1",
+        undefined,
+        environment,
+        analyticsVersion
+      );
+      const viewed2Query = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "2",
+        undefined,
+        environment,
+        analyticsVersion
+      );
+      const viewed3Query = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "3",
+        undefined,
+        environment,
+        analyticsVersion
+      );
+      const viewedPs1Query = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "ps1",
+        undefined,
+        environment,
+        analyticsVersion
+      );
+
+      const viewedNoPremium1_noPremiumQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "noPremium1",
+        false,
+        environment,
+        analyticsVersion
+      );
+      const viewedNoPremium2_noPremiumQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "noPremium2",
+        false,
+        environment,
+        analyticsVersion
+      );
+      const viewedBreathing_noPremiumQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "breathing",
+        false,
+        environment,
+        analyticsVersion
+      );
+      const viewedDiary1_noPremiumQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "diary1",
+        false,
+        environment,
+        analyticsVersion
+      );
+      const viewedQuestions1_noPremiumQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "questions1",
+        false,
+        environment,
+        analyticsVersion
+      );
+      const viewedNotification_noPremiumQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "notification",
+        undefined,
+        environment,
+        analyticsVersion
+      );
+      const viewedPs2_noPremiumQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "ps2",
+        false,
+        environment,
+        analyticsVersion
+      );
+
+      const viewedPremium1Query = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "premium1",
+        true,
+        environment,
+        analyticsVersion
+      );
+      const viewedPremium2Query = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "premium2",
+        true,
+        environment,
+        analyticsVersion
+      );
+      const viewedPremium3Query = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "premium3",
+        true,
+        environment,
+        analyticsVersion
+      );
+      const viewedSummaryQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "summary",
+        true,
+        environment,
+        analyticsVersion
+      );
+      const viewedNoPremium1_premiumQuery = buildPageViewQuery(
+        curStart,
+        curEnd,
+        "noPremium1",
+        true,
+        environment,
+        analyticsVersion
+      );
+
+      const [
+        v1Started,
+        v1StartedComparison,
+        v1Completed,
+        v1CompletedComparison,
+        v1AvgDuration,
+        v1AvgDurationComparison,
+        viewedHello,
+        viewed1,
+        viewed2,
+        viewed3,
+        viewedPs1,
+        viewedNoPremium1_noPremium,
+        viewedNoPremium2_noPremium,
+        viewedBreathing_noPremium,
+        viewedDiary1_noPremium,
+        viewedQuestions1_noPremium,
+        viewedNotification_noPremium,
+        viewedPs2_noPremium,
+        viewedPremium1,
+        viewedPremium2,
+        viewedPremium3,
+        viewedSummary,
+        viewedNoPremium1_premium,
+        v1Paywall1Views,
+        v1Paywall2Views,
+        v1TrialStartedResults,
+        v1PurchaseSuccessResults,
+      ] = await Promise.all([
+        queryPostHog(startedQuery),
+        queryPostHog(startedComparisonQuery),
+        queryPostHog(completedQuery),
+        queryPostHog(completedComparisonQuery),
+        queryPostHog(durationQuery),
+        queryPostHog(durationComparisonQuery),
+        queryPostHog(viewedHelloQuery),
+        queryPostHog(viewed1Query),
+        queryPostHog(viewed2Query),
+        queryPostHog(viewed3Query),
+        queryPostHog(viewedPs1Query),
+        queryPostHog(viewedNoPremium1_noPremiumQuery),
+        queryPostHog(viewedNoPremium2_noPremiumQuery),
+        queryPostHog(viewedBreathing_noPremiumQuery),
+        queryPostHog(viewedDiary1_noPremiumQuery),
+        queryPostHog(viewedQuestions1_noPremiumQuery),
+        queryPostHog(viewedNotification_noPremiumQuery),
+        queryPostHog(viewedPs2_noPremiumQuery),
+        queryPostHog(viewedPremium1Query),
+        queryPostHog(viewedPremium2Query),
+        queryPostHog(viewedPremium3Query),
+        queryPostHog(viewedSummaryQuery),
+        queryPostHog(viewedNoPremium1_premiumQuery),
+        queryPostHog(paywall1ViewsQuery),
+        queryPostHog(paywall2ViewsQuery),
+        queryPostHogArray(trialStartedQuery),
+        queryPostHogArray(purchaseSuccessQuery),
+      ]);
+
+      started = v1Started;
+      startedComparison = v1StartedComparison;
+      completed = v1Completed;
+      completedComparison = v1CompletedComparison;
+      avgDuration = v1AvgDuration;
+      avgDurationComparison = v1AvgDurationComparison;
+      paywall1Views = v1Paywall1Views;
+      paywall2Views = v1Paywall2Views;
+      trialStartedResults = v1TrialStartedResults;
+      purchaseSuccessResults = v1PurchaseSuccessResults;
+
+      const practiceTotal = Math.round(
+        viewedBreathing_noPremium +
+          viewedDiary1_noPremium +
+          viewedQuestions1_noPremium
+      );
+
+      pagesData = {
+        noPremium: {
+          hello: Math.round(viewedHello),
+          "1": Math.round(viewed1),
+          "1.2": Math.round(viewed1),
+          "2": Math.round(viewed2),
+          "3": Math.round(viewed3),
+          ps1: Math.round(viewedPs1),
+          noPremium1: Math.round(viewedNoPremium1_noPremium),
+          noPremium2: Math.round(viewedNoPremium2_noPremium),
+          practice: practiceTotal,
+          notification: Math.round(viewedNotification_noPremium),
+          ps2: Math.round(viewedPs2_noPremium),
+        },
+        premium: {
+          hello: Math.round(viewedHello),
+          "1": Math.round(viewed1),
+          "1.2": Math.round(viewed1),
+          "2": Math.round(viewed2),
+          "3": Math.round(viewed3),
+          ps1: Math.round(viewedPs1),
+          premium1: Math.round(viewedPremium1),
+          premium2: Math.round(viewedPremium2),
+          premium3: Math.round(viewedPremium3),
+          summary: Math.round(viewedSummary),
+          noPremium1: Math.round(viewedNoPremium1_premium),
+          notification: Math.round(viewedNotification_noPremium),
+        },
+      };
+    }
+
     function calculateDelta(current: number, previous: number): number {
       if (previous === 0) return current > 0 ? 100 : 0;
       return ((current - previous) / previous) * 100;
@@ -553,44 +724,6 @@ export async function GET(request: NextRequest) {
     const startedDelta = calculateDelta(started, startedComparison);
     const completedDelta = calculateDelta(completed, completedComparison);
     const durationDelta = calculateDelta(avgDuration, avgDurationComparison);
-
-    // Calculate practice total for noPremium flow (sum of breathing + diary + questions)
-    const practiceTotal = Math.round(
-      viewedBreathing_noPremium +
-        viewedDiary1_noPremium +
-        viewedQuestions1_noPremium
-    );
-
-    // Build pages data structure
-    const pagesData = {
-      noPremium: {
-        hello: Math.round(viewedHello),
-        "1": Math.round(viewed1),
-        "1.2": Math.round(viewed1), // Not tracked separately, use value from "1"
-        "2": Math.round(viewed2),
-        "3": Math.round(viewed3),
-        ps1: Math.round(viewedPs1),
-        noPremium1: Math.round(viewedNoPremium1_noPremium),
-        noPremium2: Math.round(viewedNoPremium2_noPremium),
-        practice: practiceTotal,
-        notification: Math.round(viewedNotification_noPremium),
-        ps2: Math.round(viewedPs2_noPremium),
-      },
-      premium: {
-        hello: Math.round(viewedHello),
-        "1": Math.round(viewed1),
-        "1.2": Math.round(viewed1), // Not tracked separately, use value from "1"
-        "2": Math.round(viewed2),
-        "3": Math.round(viewed3),
-        ps1: Math.round(viewedPs1),
-        premium1: Math.round(viewedPremium1),
-        premium2: Math.round(viewedPremium2),
-        premium3: Math.round(viewedPremium3),
-        summary: Math.round(viewedSummary),
-        noPremium1: Math.round(viewedNoPremium1_premium),
-        notification: Math.round(viewedNotification_noPremium), // Use the same value for both flows since notification is common
-      },
-    };
 
     // Process trial data
     // Initialize trial data structure
