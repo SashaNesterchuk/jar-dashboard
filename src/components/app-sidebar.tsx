@@ -59,6 +59,11 @@ const data = {
       icon: <IconBell className="w-5 h-5" />,
     },
     {
+      title: "Documents",
+      url: "/dashboard/documents",
+      icon: <IconFileDescription className="w-5 h-5" />,
+    },
+    {
       title: "AI Test",
       url: "/dashboard/ai-test",
       icon: <IconFlask className="w-5 h-5" />,

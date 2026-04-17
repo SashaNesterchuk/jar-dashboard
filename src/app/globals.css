@@ -112,6 +112,56 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Collaborative MD editor: preview typography (extends @uiw defaults) */
+.collab-md-workspace .wmde-markdown,
+.collab-md-workspace .wmde-markdown-var {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+.collab-md-workspace .wmde-markdown h1 {
+  font-size: 1.65rem;
+  font-weight: 700;
+  margin-top: 1.1em;
+  margin-bottom: 0.45em;
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--border);
+}
+.collab-md-workspace .wmde-markdown h2 {
+  font-size: 1.35rem;
+  font-weight: 650;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+.collab-md-workspace .wmde-markdown h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-top: 0.85em;
+  margin-bottom: 0.35em;
+}
+.collab-md-workspace .wmde-markdown p {
+  margin-top: 0.65em;
+  margin-bottom: 0.65em;
+}
+.collab-md-workspace .wmde-markdown ul,
+.collab-md-workspace .wmde-markdown ol {
+  margin-top: 0.5em;
+  margin-bottom: 0.75em;
+  padding-left: 1.35em;
+}
+.collab-md-workspace .wmde-markdown blockquote {
+  margin: 0.75em 0;
+  padding: 0.35em 0 0.35em 0.9em;
+  border-left: 4px solid var(--muted-foreground);
+  opacity: 0.95;
+}
+.collab-md-workspace .wmde-markdown pre {
+  margin: 0.75em 0;
+  border-radius: var(--radius-md);
+}
+.collab-md-workspace .wmde-markdown hr {
+  margin: 1.25em 0;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
