@@ -3,11 +3,18 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, Upload } from "lucide-react";
+import { Download, Folder, FolderPlus, Trash2, Upload } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -22,7 +29,10 @@ import {
   safeDownloadBasename,
 } from "@/lib/collab-doc-files";
 import { getDocsSupabaseBrowserClient } from "@/lib/docs-supabase";
-import type { CollabDocumentListRow } from "@/types/collab-docs";
+import type {
+  CollabDocumentFolder,
+  CollabDocumentListRow,
+} from "@/types/collab-docs";
 
 function formatDate(iso: string) {
   try {
@@ -35,12 +45,24 @@ function formatDate(iso: string) {
   }
 }
 
+function openChatForRow(row: CollabDocumentListRow): string | null {
+  return row.primary_chat_id ?? row.chats?.id ?? null;
+}
+
 export default function DocumentsPage() {
   const router = useRouter();
   const [rows, setRows] = React.useState<CollabDocumentListRow[]>([]);
+  const [folders, setFolders] = React.useState<CollabDocumentFolder[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = React.useState<string>("all");
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
+  const [deletingDocId, setDeletingDocId] = React.useState<string | null>(null);
+  const [movingDocId, setMovingDocId] = React.useState<string | null>(null);
+  const [creatingFolder, setCreatingFolder] = React.useState(false);
+  const [deletingFolderId, setDeletingFolderId] = React.useState<string | null>(
+    null
+  );
   const [listFileError, setListFileError] = React.useState<string | null>(null);
   const [configOk, setConfigOk] = React.useState(false);
   const importInputRef = React.useRef<HTMLInputElement>(null);
@@ -62,27 +84,194 @@ export default function DocumentsPage() {
     setLoadError(null);
     try {
       const supabase = getDocsSupabaseBrowserClient();
-      const { data, error } = await supabase
-        .from("documents")
-        .select(
-          "id, chat_id, title, content, updated_at, created_at, chats(id, title, created_at, default_model)"
-        )
-        .order("updated_at", { ascending: false });
+      const [{ data: docsData, error: docsError }, { data: foldersData, error: foldersError }] =
+        await Promise.all([
+          supabase
+            .from("documents")
+            .select(
+              "id, primary_chat_id, folder_id, title, content, updated_at, created_at, chats!chats_document_id_fkey(id, title, created_at, default_model)"
+            )
+            .order("updated_at", { ascending: false }),
+          supabase
+            .from("document_folders")
+            .select("id, name, parent_id, created_at, updated_at")
+            .order("name", { ascending: true }),
+        ]);
 
-      if (error) {
-        setLoadError(error.message);
+      if (docsError) {
+        setLoadError(docsError.message);
         return;
       }
-      const list = Array.isArray(data)
-        ? data.map((r) =>
+      if (foldersError) {
+        if (foldersError.code === "PGRST205") {
+          setFolders([]);
+          setLoadError(
+            "Folders are not available yet. Apply the latest Supabase migration to enable them."
+          );
+        } else {
+          setLoadError(foldersError.message);
+          return;
+        }
+      }
+
+      const list = Array.isArray(docsData)
+        ? docsData.map((r) =>
             normalizeDocumentListRow(r as Record<string, unknown>)
           )
         : [];
+      const folderList = Array.isArray(foldersData)
+        ? (foldersData as CollabDocumentFolder[])
+        : [];
+
+      if (
+        selectedFolderId !== "all" &&
+        selectedFolderId !== "unfiled" &&
+        !folderList.some((folder) => folder.id === selectedFolderId)
+      ) {
+        setSelectedFolderId("all");
+      }
+
+      setFolders(folderList);
       setRows(list);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load documents");
     }
-  }, [configOk]);
+  }, [configOk, selectedFolderId]);
+
+  const filteredRows = React.useMemo(() => {
+    if (selectedFolderId === "all") {
+      return rows.filter((row) => !row.folder_id);
+    }
+    if (selectedFolderId === "unfiled") {
+      return rows.filter((row) => !row.folder_id);
+    }
+    return rows.filter((row) => row.folder_id === selectedFolderId);
+  }, [rows, selectedFolderId]);
+
+  const visibleFolders = React.useMemo(() => {
+    if (selectedFolderId === "all") {
+      return folders.filter((folder) => !folder.parent_id);
+    }
+    if (selectedFolderId === "unfiled") return [];
+    return folders.filter((folder) => folder.parent_id === selectedFolderId);
+  }, [folders, selectedFolderId]);
+
+  const folderById = React.useMemo(() => {
+    return new Map(folders.map((folder) => [folder.id, folder]));
+  }, [folders]);
+
+  const breadcrumbs = React.useMemo(() => {
+    const root = [{ id: "all", label: "Documents" }];
+    if (selectedFolderId === "all" || selectedFolderId === "unfiled") {
+      return root;
+    }
+
+    const chain: Array<{ id: string; label: string }> = [];
+    const seen = new Set<string>();
+    let currentId: string | null = selectedFolderId;
+    while (currentId && !seen.has(currentId)) {
+      seen.add(currentId);
+      const folder = folderById.get(currentId);
+      if (!folder) break;
+      chain.unshift({ id: folder.id, label: folder.name });
+      currentId = folder.parent_id;
+    }
+
+    return [...root, ...chain];
+  }, [folderById, selectedFolderId]);
+
+  const handleCreateFolder = React.useCallback(async () => {
+    const input = window.prompt("Folder name");
+    const name = input?.trim();
+    if (!name) return;
+
+    setCreatingFolder(true);
+    setLoadError(null);
+    setListFileError(null);
+    try {
+      const supabase = getDocsSupabaseBrowserClient();
+      const parentId =
+        selectedFolderId === "all" || selectedFolderId === "unfiled"
+          ? null
+          : selectedFolderId;
+      const { error } = await supabase
+        .from("document_folders")
+        .insert({ name, parent_id: parentId });
+      if (error) {
+        setLoadError(error.message);
+        return;
+      }
+      await refresh();
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to create folder");
+    } finally {
+      setCreatingFolder(false);
+    }
+  }, [refresh, selectedFolderId]);
+
+  const handleDeleteFolder = React.useCallback(
+    async (folder: CollabDocumentFolder) => {
+      const usedBy = rows.filter((row) => row.folder_id === folder.id).length;
+      const ok = window.confirm(
+        usedBy > 0
+          ? `Delete folder "${folder.name}"? ${usedBy} document(s) will become unfiled.`
+          : `Delete folder "${folder.name}"?`
+      );
+      if (!ok) return;
+
+      setDeletingFolderId(folder.id);
+      setLoadError(null);
+      setListFileError(null);
+      try {
+        const supabase = getDocsSupabaseBrowserClient();
+        const { error } = await supabase
+          .from("document_folders")
+          .delete()
+          .eq("id", folder.id);
+        if (error) {
+          setLoadError(error.message);
+          return;
+        }
+        if (selectedFolderId === folder.id) {
+          setSelectedFolderId("all");
+        }
+        await refresh();
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : "Failed to delete folder");
+      } finally {
+        setDeletingFolderId(null);
+      }
+    },
+    [refresh, rows, selectedFolderId]
+  );
+
+  const handleMoveDocument = React.useCallback(
+    async (row: CollabDocumentListRow, targetFolderId: string) => {
+      const nextFolderId = targetFolderId === "unfiled" ? null : targetFolderId;
+      if (row.folder_id === nextFolderId) return;
+
+      setMovingDocId(row.id);
+      setLoadError(null);
+      setListFileError(null);
+      try {
+        const supabase = getDocsSupabaseBrowserClient();
+        const { error } = await supabase
+          .from("documents")
+          .update({ folder_id: nextFolderId })
+          .eq("id", row.id);
+        if (error) {
+          setLoadError(error.message);
+          return;
+        }
+        await refresh();
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : "Failed to move document");
+      } finally {
+        setMovingDocId(null);
+      }
+    },
+    [refresh]
+  );
 
   React.useEffect(() => {
     void refresh();
@@ -182,6 +371,38 @@ export default function DocumentsPage() {
     [router]
   );
 
+  const handleDeleteRow = React.useCallback(
+    async (row: CollabDocumentListRow) => {
+      setLoadError(null);
+      setListFileError(null);
+      const label = row.title?.trim() || "Untitled";
+      const ok = window.confirm(
+        `Delete document "${label}"? This will remove all chats and messages for this document.`
+      );
+      if (!ok) return;
+
+      setDeletingDocId(row.id);
+      try {
+        const res = await fetch(`/api/collab-docs/documents/${row.id}`, {
+          method: "DELETE",
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!res.ok) {
+          setLoadError(json.error || `HTTP ${res.status}`);
+          return;
+        }
+        await refresh();
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : "Failed to delete document");
+      } finally {
+        setDeletingDocId(null);
+      }
+    },
+    [refresh]
+  );
+
   return (
     <SidebarProvider
       style={
@@ -202,10 +423,20 @@ export default function DocumentsPage() {
                   <h1 className="text-3xl font-bold mb-2">Documents</h1>
                   <p className="text-muted-foreground max-w-2xl">
                     Open a session, start blank, or import a Markdown file. Export
-                    any row as <code className="text-xs">.md</code>.
+                    any row as <code className="text-xs">.md</code> and organize
+                    docs into folders.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!configOk || creatingFolder}
+                    onClick={() => void handleCreateFolder()}
+                  >
+                    <FolderPlus className="size-4" />
+                    {creatingFolder ? "Creating folder..." : "New folder"}
+                  </Button>
                   <input
                     ref={importInputRef}
                     type="file"
@@ -236,6 +467,23 @@ export default function DocumentsPage() {
                 </div>
               </div>
 
+              <div className="px-4 lg:px-6 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                {breadcrumbs.map((crumb, index) => (
+                  <React.Fragment key={crumb.id}>
+                    {index > 0 ? <span>/</span> : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={index === breadcrumbs.length - 1 ? "secondary" : "ghost"}
+                      onClick={() => setSelectedFolderId(crumb.id)}
+                      disabled={index === breadcrumbs.length - 1}
+                    >
+                      {crumb.label}
+                    </Button>
+                  </React.Fragment>
+                ))}
+              </div>
+
               {loadError ? (
                 <div className="px-4 lg:px-6 text-sm text-destructive">
                   {loadError}
@@ -257,22 +505,83 @@ export default function DocumentsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows.length === 0 ? (
+                    {filteredRows.length === 0 && visibleFolders.length === 0 ? (
                       <TableRow>
                         <TableCell
                           colSpan={3}
                           className="text-muted-foreground text-center py-8"
                         >
-                          {configOk
-                            ? "No documents yet. Create one with New document."
-                            : "Configure Supabase env vars to load documents."}
+                          {!configOk
+                            ? "Configure Supabase env vars to load documents."
+                            : selectedFolderId === "all"
+                              ? "No documents yet. Create one with New document."
+                              : "This folder is empty."}
                         </TableCell>
                       </TableRow>
                     ) : (
-                      rows.map((row) => (
-                        <TableRow key={row.id}>
+                      <>
+                        {visibleFolders.map((folder) => (
+                          <TableRow
+                            key={folder.id}
+                            className="cursor-pointer"
+                            onClick={() => setSelectedFolderId(folder.id)}
+                          >
+                            <TableCell className="font-medium">
+                              <div className="inline-flex items-center gap-2">
+                                <Folder className="size-4 text-muted-foreground" />
+                                <span>{folder.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatDate(folder.updated_at)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={deletingFolderId === folder.id}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleDeleteFolder(folder);
+                                  }}
+                                >
+                                  <Trash2 className="size-4" />
+                                  {deletingFolderId === folder.id
+                                    ? "Deleting…"
+                                    : "Delete"}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {filteredRows.map((row) => {
+                          const openChat = openChatForRow(row);
+                          return (
+                        <TableRow
+                          key={row.id}
+                          className={openChat ? "cursor-pointer" : "cursor-default"}
+                          onClick={() => {
+                            if (openChat) {
+                              router.push(`/dashboard/documents/${openChat}`);
+                            }
+                          }}
+                        >
                           <TableCell className="font-medium">
-                            {row.title?.trim() || "Untitled"}
+                            {openChat ? (
+                              <Link
+                                href={`/dashboard/documents/${openChat}`}
+                                className="hover:underline"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {row.title?.trim() || "Untitled"}
+                              </Link>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {row.title?.trim() || "Untitled"}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="text-muted-foreground">
                             {formatDate(row.updated_at)}
@@ -283,22 +592,83 @@ export default function DocumentsPage() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleExportRow(row)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleExportRow(row);
+                                }}
+                                disabled={
+                                  deletingDocId === row.id ||
+                                  movingDocId === row.id
+                                }
                               >
                                 <Download className="size-4" />
                                 Export
                               </Button>
+                              <Select
+                                value={row.folder_id ?? "unfiled"}
+                                onValueChange={(value) =>
+                                  void handleMoveDocument(row, value)
+                                }
+                                disabled={
+                                  deletingDocId === row.id ||
+                                  movingDocId === row.id
+                                }
+                              >
+                                <SelectTrigger
+                                  className="h-8 w-[160px]"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <SelectValue placeholder="Move to folder" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="unfiled">Unfiled</SelectItem>
+                                  {folders.map((folder) => (
+                                    <SelectItem key={folder.id} value={folder.id}>
+                                      {folder.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <Button variant="outline" size="sm" asChild>
                                 <Link
-                                  href={`/dashboard/documents/${row.chat_id}`}
+                                  href={
+                                    openChat
+                                      ? `/dashboard/documents/${openChat}`
+                                      : "#"
+                                  }
+                                  onClick={(event) => event.stopPropagation()}
+                                  aria-disabled={!openChat}
+                                  className={
+                                    !openChat ? "pointer-events-none opacity-50" : ""
+                                  }
                                 >
                                   Open
                                 </Link>
                               </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                disabled={
+                                  deletingDocId === row.id ||
+                                  movingDocId === row.id
+                                }
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleDeleteRow(row);
+                                }}
+                              >
+                                <Trash2 className="size-4" />
+                                {deletingDocId === row.id
+                                  ? "Deleting…"
+                                  : "Delete"}
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))
+                          );
+                        })}
+                      </>
                     )}
                   </TableBody>
                 </Table>

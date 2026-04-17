@@ -107,6 +107,7 @@
 6. E1–E3  
 7. F1–F2  
 8. G1–G3  
+9. I1–I7 (proposal + diff + apply/reject)
 
 ---
 
@@ -121,6 +122,23 @@
 | H3 | **Конфликт документа** (лёгкий F2) | Если пришёл remote UPDATE `documents` пока textarea в фокусе — баннер + «Load latest» (`refreshDoc`), не затирать локальный текст молча. |
 | H4 | Разделение «человек / ассистент» в ленте | Бейдж «Note» для `note_only`; при желании позже — отдельный стиль для сообщений с контекстом к ИИ. |
 | H5 | G3 + мониторинг | Ручной регресс; при проде — алерты по 5xx `/api/collab-docs/chat`, лимиты в Vercel. |
+
+---
+
+## Epic I — Single-model proposal/diff/apply (Cursor-like flow)
+
+**Статус: planned**. Цель — убрать авто-применение правок и перейти на режим «предложение изменений → просмотр diff → Apply/Reject».  
+См. детальный дизайн: [ai-chat-diff-cursor-like.md](./ai-chat-diff-cursor-like.md).
+
+| ID | Задача | Критерии готовности / заметки |
+|----|--------|-------------------------------|
+| I1 | Зафиксировать контракт single-model API | `POST /api/collab-docs/chat` принимает один `modelId`; ответ содержит один `candidate` (`candidateId`, `chatReply`, `documentMarkdown`, `usage`, `latencyMs`), без массива `candidates`. |
+| I2 | Добавить хранение кандидатов изменений | Новая таблица `ai_change_candidates` с `base_document_content`, `candidate_document_content`, `model`, `status`, `usage`, `latency_ms`, `applied_at`; FK на `chat_id` и `document_id`. |
+| I3 | Изменить flow route `/api/collab-docs/chat` | Route создаёт candidate и возвращает его в UI; документ не обновляется автоматически в этом route. |
+| I4 | Реализовать diff UI (git-like) | Для candidate показывать line diff: зелёный add, красный remove; в MVP достаточно `diffLines`/`createPatch` из `diff` (jsdiff). |
+| I5 | Добавить действия Apply / Reject | `Apply` обновляет `documents.content`, проставляет candidate `status='applied'`; `Reject` ставит `status='rejected'` без изменения документа. |
+| I6 | Stale-check перед Apply | Сравнение текущего `documents.content` с `base_document_content` кандидата; при несовпадении блокировать apply и просить regenerate. |
+| I7 | Унифицировать adapter провайдеров | OpenAI/Anthropic маппятся в один внутренний формат (`chat_reply`, `document_markdown`) чтобы смена `modelId` не ломала diff/apply pipeline. |
 
 ---
 

@@ -1,0 +1,113 @@
+{
+  "request": {
+    "prompt": "создай один документ на основе двух",
+    "chatId": "e3cc05fd-7810-4f0e-84a0-9d1e9194d070",
+    "documentId": "55ac89a4-355e-436f-a13b-949e0d75cf77",
+    "contextDocumentIds": [
+      "6dd1fddc-b081-4910-b93d-9184eebd44b8",
+      "01dd5df4-6b2d-48bc-b29c-e24031405d4a"
+    ],
+    "modelId": "gpt-4o-mini"
+  },
+  "http": {
+    "status": 200,
+    "elapsedMs": 7845
+  },
+  "response": {
+    "ok": true,
+    "candidate": {
+      "id": "1adde6d6-1796-4ab9-8969-dc2c4323fafc",
+      "chat_id": "e3cc05fd-7810-4f0e-84a0-9d1e9194d070",
+      "document_id": "55ac89a4-355e-436f-a13b-949e0d75cf77",
+      "base_document_content": "# Бізнес-аналіз флоу та екранів на основі поведінки користувачів",
+      "candidate_document_content": "# Бізнес-аналіз флоу та екранів на основі поведінки користувачів",
+      "model": "gpt-4o-mini",
+      "chat_reply": "Сделал безопасный fallback: нужен перезапуск генерации. (patch-target-outside-scope)",
+      "status": "pending",
+      "usage": {
+        "prompt_tokens": 6390,
+        "completion_tokens": 362
+      },
+      "latency_ms": 7430,
+      "created_at": "2026-04-17T13:35:09.504007+00:00",
+      "applied_at": null,
+      "applied_by": null
+    },
+    "runDiagnostics": {
+      "engine": "langgraph",
+      "available": true,
+      "run_id": "af9a7099-e72c-4ba0-988d-6e4e064f3175",
+      "stage": "complete",
+      "intent": "answer_only",
+      "language": "ru",
+      "retries": 0,
+      "selected_sources_count": 20,
+      "budget": {
+        "max_input_tokens": 90000,
+        "reserved_output_tokens": 4096,
+        "used_input_tokens": 3379
+      },
+      "validation": {
+        "structural_ok": true,
+        "language_ok": true,
+        "safety_ok": true,
+        "source_coverage_ok": true,
+        "issues": [
+          "patch-target-outside-scope"
+        ]
+      },
+      "diagnostics_count": 9,
+      "diagnostics_tail": [
+        {
+          "stage": "intent",
+          "code": "intent.classified",
+          "message": "engine=langgraph; intent=answer_only; language=ru; confidence=0.62; reasons=default-answer-only",
+          "at_ms": 1776432902050
+        },
+        {
+          "stage": "context_plan",
+          "code": "context.tier.selected",
+          "message": "tier=B_section; selected_sources=20; editable_chunks=1",
+          "at_ms": 1776432902289
+        },
+        {
+          "stage": "draft_plan",
+          "code": "plan.ready",
+          "message": "depth=normal; targets=1; confidence=0.79",
+          "at_ms": 1776432902289
+        },
+        {
+          "stage": "draft_plan",
+          "code": "prompt.composed",
+          "message": "Editable chunks: 1",
+          "at_ms": 1776432902290
+        },
+        {
+          "stage": "propose_patch",
+          "code": "llm.invoke.primary",
+          "message": "Calling model for primary patch proposal.",
+          "at_ms": 1776432902290
+        },
+        {
+          "stage": "validate",
+          "code": "validation.result",
+          "message": "issues=patch-target-outside-scope",
+          "at_ms": 1776432909222
+        },
+        {
+          "stage": "repair",
+          "code": "validation.fallback",
+          "message": "Applied controlled fallback payload after validation failure.",
+          "at_ms": 1776432909223
+        },
+        {
+          "stage": "complete",
+          "code": "candidate.ready",
+          "message": "latency_ms=7430",
+          "at_ms": 1776432909223
+        }
+      ],
+      "latency_ms": 7430
+    }
+  }
+}

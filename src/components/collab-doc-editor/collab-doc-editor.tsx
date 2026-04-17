@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { diffLines } from "diff";
 import Link from "next/link";
-import { Download, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Download, Upload, X } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -12,18 +14,33 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CollabDocChatPanel } from "@/components/collab-doc-editor/collab-doc-chat-panel";
 import { CollabMarkdownEditor } from "@/components/collab-doc-editor/collab-markdown-editor";
-import { normalizeDocWithChat } from "@/lib/collab-docs-normalize";
 import {
   COLLAB_DEFAULT_MODEL_ID,
   getCollabModel,
 } from "@/lib/collab-ai-models";
 import { getDocsSupabaseBrowserClient } from "@/lib/docs-supabase";
-import type { CollabMessage, CollabMessageMetadata } from "@/types/collab-docs";
+import type {
+  CollabAiChangeCandidate,
+  CollabMessage,
+  CollabMessageMetadata,
+} from "@/types/collab-docs";
 import { cn } from "@/lib/utils";
 import {
   COLLAB_IMPORT_MAX_BYTES,
   safeDownloadBasename,
 } from "@/lib/collab-doc-files";
+
+const OPEN_DOC_TABS_STORAGE_KEY = "collab-doc-open-tabs-v1";
+const MAX_OPEN_DOC_TABS = 5;
+type CachedChatState = {
+  documentId: string | null;
+  title: string;
+  content: string;
+  modelId: string;
+  messages: CollabMessage[];
+  otherDocs: { id: string; title: string | null }[];
+};
+const CHAT_STATE_CACHE = new Map<string, CachedChatState>();
 
 function normalizeMessageRow(raw: Record<string, unknown>): CollabMessage {
   return {
@@ -43,7 +60,41 @@ interface CollabDocEditorProps {
   chatId: string;
 }
 
-export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
+export function CollabDocEditor({ chatId: initialChatId }: CollabDocEditorProps) {
+  const router = useRouter();
+  /**
+   * Keep the active chat id in local state so that switching between open
+   * document tabs happens purely client-side via `history.pushState` and
+   * does NOT trigger a Next.js App Router navigation (which would re-fetch
+   * the RSC payload for the dynamic segment and cause a visible reload).
+   * The prop is only used as the initial value on mount; subsequent URL
+   * changes from back/forward are synced via `popstate`.
+   */
+  const [chatId, setChatIdState] = React.useState(initialChatId);
+  React.useEffect(() => {
+    setChatIdState(initialChatId);
+  }, [initialChatId]);
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handlePop = () => {
+      const match = window.location.pathname.match(
+        /\/dashboard\/documents\/([^/?#]+)/
+      );
+      if (match?.[1]) setChatIdState(match[1]);
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
+  const setActiveChatId = React.useCallback((id: string) => {
+    if (typeof window !== "undefined") {
+      const nextUrl = `/dashboard/documents/${id}`;
+      if (window.location.pathname !== nextUrl) {
+        window.history.pushState(null, "", nextUrl);
+      }
+    }
+    setChatIdState(id);
+  }, []);
+
   const [documentId, setDocumentId] = React.useState<string | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -62,10 +113,86 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
     { id: string; title: string | null }[]
   >([]);
   const [contextIds, setContextIds] = React.useState<string[]>([]);
-  const [contextOpen, setContextOpen] = React.useState(true);
+  const [documentChats, setDocumentChats] = React.useState<
+    { id: string; title: string | null }[]
+  >([]);
   const [docFileError, setDocFileError] = React.useState<string | null>(null);
+  const [candidate, setCandidate] = React.useState<CollabAiChangeCandidate | null>(
+    null
+  );
+  const [openTabs, setOpenTabs] = React.useState<string[]>([]);
+  const [tabsHydrated, setTabsHydrated] = React.useState(false);
+  const [tabTitles, setTabTitles] = React.useState<Record<string, string>>({});
+  /** Preserved while `loading` toggles (Tabs unmount); avoid resetting to Document after new chat. */
+  const [mobileMainTab, setMobileMainTab] = React.useState<"doc" | "chat">(
+    "doc"
+  );
 
   const contentDraftRef = React.useRef(content);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(OPEN_DOC_TABS_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      const storedTabs = Array.isArray(parsed)
+        ? parsed.filter((value): value is string => typeof value === "string")
+        : [];
+      const deduped = Array.from(new Set([...storedTabs, chatId]));
+      const nextTabs =
+        deduped.length > MAX_OPEN_DOC_TABS
+          ? deduped.slice(deduped.length - MAX_OPEN_DOC_TABS)
+          : deduped;
+      setOpenTabs(nextTabs);
+    } catch {
+      setOpenTabs([chatId]);
+    } finally {
+      setTabsHydrated(true);
+    }
+  }, [chatId]);
+
+  React.useEffect(() => {
+    if (!tabsHydrated || typeof window === "undefined") return;
+    window.localStorage.setItem(OPEN_DOC_TABS_STORAGE_KEY, JSON.stringify(openTabs));
+  }, [openTabs, tabsHydrated]);
+
+  React.useEffect(() => {
+    if (!openTabs.length) return;
+    const supabase = getDocsSupabaseBrowserClient();
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("chats")
+        .select("id, documents!chats_document_id_fkey(title)")
+        .in("id", openTabs);
+      if (cancelled || error) return;
+
+      const titles: Record<string, string> = {};
+      for (const row of data ?? []) {
+        const raw = row as {
+          id?: string;
+          documents?: { title?: string | null } | null;
+        };
+        if (!raw.id) continue;
+        titles[raw.id] = raw.documents?.title?.trim() || "Untitled";
+      }
+      if (!cancelled) {
+        setTabTitles(titles);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [openTabs]);
+
+  React.useEffect(() => {
+    setTabTitles((prev) => ({
+      ...prev,
+      [chatId]: title.trim() || "Untitled",
+    }));
+  }, [chatId, title]);
 
   React.useEffect(() => {
     contentDraftRef.current = content;
@@ -78,29 +205,69 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
     );
   }, [documentId]);
 
+  React.useEffect(() => {
+    if (!documentId) {
+      setDocumentChats([]);
+      return;
+    }
+    const supabase = getDocsSupabaseBrowserClient();
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("chats")
+        .select("id, title, created_at")
+        .eq("document_id", documentId)
+        .order("created_at", { ascending: true });
+      if (cancelled || error) return;
+      setDocumentChats(
+        (data ?? [])
+          .filter((row) => typeof row.id === "string")
+          .map((row) => ({
+            id: row.id as string,
+            title: (row.title as string | null) ?? null,
+          }))
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId, chatId]);
+
   const editorFocused = React.useRef(false);
   const importFileInputRef = React.useRef<HTMLInputElement>(null);
   const saveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const documentIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    documentIdRef.current = documentId;
+  }, [documentId]);
+  const documentChatsRef = React.useRef(documentChats);
+  React.useEffect(() => {
+    documentChatsRef.current = documentChats;
+  }, [documentChats]);
+  /**
+   * Which chatId the current component state actually belongs to.
+   * Used to prevent the "save to cache" effect from writing stale values
+   * (belonging to the previous chatId) into the new chatId's cache entry
+   * during the brief moment between `chatId` prop change and the load effect
+   * populating state.
+   */
+  const loadedChatIdRef = React.useRef<string | null>(null);
+
   const refreshDoc = React.useCallback(async () => {
+    if (!documentId) return;
     const supabase = getDocsSupabaseBrowserClient();
     const { data, error: qErr } = await supabase
       .from("documents")
-      .select(
-        "id, chat_id, title, content, created_at, updated_at, chats(id, created_at, title, default_model)"
-      )
-      .eq("chat_id", chatId)
+      .select("id, title, content, created_at, updated_at, folder_id")
+      .eq("id", documentId)
       .maybeSingle();
     if (qErr || !data) return;
-    const d = normalizeDocWithChat(data as Record<string, unknown>);
-    setDocumentId(d.id);
-    setTitle(d.title ?? "");
+    setTitle((data.title as string | null) ?? "");
     if (!editorFocused.current) {
-      setContent(d.content ?? "");
+      setContent((data.content as string | null) ?? "");
     }
-    const dm = d.chats?.default_model;
-    if (dm && getCollabModel(dm)) setModelId(dm);
-  }, [chatId]);
+  }, [documentId]);
 
   const refreshMessages = React.useCallback(async () => {
     const supabase = getDocsSupabaseBrowserClient();
@@ -120,6 +287,51 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
+      setLoadError(null);
+      setRemoteDocStale(false);
+      setCandidate(null);
+      const cached = CHAT_STATE_CACHE.get(chatId);
+      if (cached) {
+        setDocumentId(cached.documentId);
+        setTitle(cached.title);
+        setContent(cached.content);
+        setModelId(cached.modelId);
+        setMessages(cached.messages);
+        setOtherDocs(cached.otherDocs);
+        loadedChatIdRef.current = chatId;
+        setLoading(false);
+        return;
+      }
+      const siblingDocId = documentIdRef.current;
+      const isSiblingChat =
+        !!siblingDocId &&
+        documentChatsRef.current.some((c) => c.id === chatId);
+      if (isSiblingChat) {
+        try {
+          const supabase = getDocsSupabaseBrowserClient();
+          const { data: chatRow } = await supabase
+            .from("chats")
+            .select("id, default_model")
+            .eq("id", chatId)
+            .maybeSingle();
+          if (cancelled) return;
+          const nextModelId =
+            chatRow?.default_model &&
+            getCollabModel(chatRow.default_model as string)
+              ? (chatRow.default_model as string)
+              : COLLAB_DEFAULT_MODEL_ID;
+          setModelId(nextModelId);
+          await refreshMessages();
+          loadedChatIdRef.current = chatId;
+          setLoading(false);
+        } catch (e) {
+          if (!cancelled) {
+            setLoadError(e instanceof Error ? e.message : "Load failed");
+            setLoading(false);
+          }
+        }
+        return;
+      }
       const url = process.env.NEXT_PUBLIC_DOCS_SUPABASE_URL;
       const key = process.env.NEXT_PUBLIC_DOCS_SUPABASE_ANON_KEY;
       if (!url || !key) {
@@ -127,35 +339,74 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
         setLoading(false);
         return;
       }
+      setLoading(true);
       try {
         const supabase = getDocsSupabaseBrowserClient();
-        const { data, error: qErr } = await supabase
-          .from("documents")
+        const { data: chatRow, error: qErr } = await supabase
+          .from("chats")
           .select(
-            "id, chat_id, title, content, created_at, updated_at, chats(id, created_at, title, default_model)"
+            `id, created_at, title, default_model, document_id,
+             documents!chats_document_id_fkey(id, folder_id, title, content, created_at, updated_at, primary_chat_id)`
           )
-          .eq("chat_id", chatId)
+          .eq("id", chatId)
           .maybeSingle();
         if (cancelled) return;
-        if (qErr || !data) {
-          setLoadError(qErr?.message ?? "Document not found");
+        if (qErr || !chatRow) {
+          setLoadError(qErr?.message ?? "Chat not found");
           setLoading(false);
           return;
         }
-        const d = normalizeDocWithChat(data as Record<string, unknown>);
-        setDocumentId(d.id);
-        setTitle(d.title ?? "");
-        setContent(d.content ?? "");
-        const dm = d.chats?.default_model;
-        if (dm && getCollabModel(dm)) setModelId(dm);
+        const rawDoc = chatRow.documents as
+          | {
+              id: string;
+              folder_id?: string | null;
+              title?: string | null;
+              content?: string | null;
+              created_at?: string;
+              updated_at?: string;
+            }
+          | {
+              id: string;
+              folder_id?: string | null;
+              title?: string | null;
+              content?: string | null;
+              created_at?: string;
+              updated_at?: string;
+            }[]
+          | null;
+        const docNested = Array.isArray(rawDoc) ? rawDoc[0] ?? null : rawDoc;
+        if (!docNested?.id) {
+          setLoadError("Document not found for this chat");
+          setLoading(false);
+          return;
+        }
+        setDocumentId(docNested.id);
+        setTitle(docNested.title ?? "");
+        setContent(docNested.content ?? "");
+        const nextModelId =
+          chatRow.default_model && getCollabModel(chatRow.default_model as string)
+            ? (chatRow.default_model as string)
+            : COLLAB_DEFAULT_MODEL_ID;
+        setModelId(nextModelId);
         await refreshMessages();
         const { data: allDocs } = await supabase
           .from("documents")
           .select("id, title")
-          .neq("id", d.id)
+          .neq("id", docNested.id)
           .order("updated_at", { ascending: false })
           .limit(100);
-        if (!cancelled) setOtherDocs(allDocs ?? []);
+        if (!cancelled) {
+          setOtherDocs(allDocs ?? []);
+          CHAT_STATE_CACHE.set(chatId, {
+            documentId: docNested.id,
+            title: docNested.title ?? "",
+            content: docNested.content ?? "",
+            modelId: nextModelId,
+            messages: [],
+            otherDocs: allDocs ?? [],
+          });
+          loadedChatIdRef.current = chatId;
+        }
         setLoading(false);
       } catch (e) {
         if (!cancelled) {
@@ -168,6 +419,25 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
       cancelled = true;
     };
   }, [chatId, refreshMessages]);
+
+  React.useEffect(() => {
+    // Only persist to cache once the state actually reflects this chatId.
+    // Otherwise we'd overwrite the new chat's cache with the previous chat's
+    // state during the render right after a tab switch.
+    if (loadedChatIdRef.current !== chatId) return;
+    const existing = CHAT_STATE_CACHE.get(chatId);
+    if (!existing && !documentId && !title && !content && messages.length === 0) {
+      return;
+    }
+    CHAT_STATE_CACHE.set(chatId, {
+      documentId,
+      title,
+      content,
+      modelId,
+      messages,
+      otherDocs,
+    });
+  }, [chatId, content, documentId, messages, modelId, otherDocs, title]);
 
   const persistDocument = React.useCallback(
     async (patch: { title?: string; content?: string }) => {
@@ -308,6 +578,103 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
     [chatId]
   );
 
+  const tabsToRender = openTabs.length > 0 ? openTabs : [chatId];
+
+  const handleCloseTab = React.useCallback(
+    (targetChatId: string) => {
+      setOpenTabs((prev) => {
+        const next = prev.filter((id) => id !== targetChatId);
+        if (targetChatId === chatId) {
+          const fallback = next[next.length - 1];
+          if (fallback) {
+            setActiveChatId(fallback);
+          } else {
+            router.replace("/dashboard/documents");
+          }
+        }
+        return next;
+      });
+    },
+    [chatId, router]
+  );
+
+  const handleDeleteChat = React.useCallback(
+    async (targetChatId: string) => {
+      if (!documentId) return;
+      const current = documentChatsRef.current;
+      if (current.length <= 1) {
+        setLoadError("Cannot delete the only chat for this document.");
+        return;
+      }
+      const fallback =
+        current.find((c) => c.id !== targetChatId)?.id ?? null;
+      // Optimistic UI.
+      setDocumentChats((prev) => prev.filter((c) => c.id !== targetChatId));
+      CHAT_STATE_CACHE.delete(targetChatId);
+      if (targetChatId === chatId && fallback) {
+        setActiveChatId(fallback);
+      }
+      try {
+        const res = await fetch(
+          `/api/collab-docs/chats/${targetChatId}`,
+          { method: "DELETE" }
+        );
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          nextActiveChatId?: string | null;
+        };
+        if (!res.ok) {
+          setLoadError(json.error || `HTTP ${res.status}`);
+          setDocumentChats(current);
+          return;
+        }
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : "Failed to delete chat");
+        setDocumentChats(current);
+      }
+    },
+    [chatId, documentId, setActiveChatId]
+  );
+
+  const handleNewChat = React.useCallback(async () => {
+    if (!documentId) return;
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/collab-docs/documents/${documentId}/chats`, {
+        method: "POST",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        chatId?: string;
+      };
+      if (!res.ok) {
+        setLoadError(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      if (!json.chatId) {
+        setLoadError("No chatId in response");
+        return;
+      }
+      CHAT_STATE_CACHE.set(json.chatId, {
+        documentId,
+        title,
+        content,
+        modelId,
+        messages: [],
+        otherDocs,
+      });
+      setDocumentChats((prev) =>
+        prev.some((c) => c.id === json.chatId)
+          ? prev
+          : [...prev, { id: json.chatId as string, title: null }]
+      );
+      setMobileMainTab("chat");
+      setActiveChatId(json.chatId);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to create chat");
+    }
+  }, [documentId, router]);
+
   const editorPane = (
     <div className="flex flex-col gap-3 min-h-0 flex-1">
       {remoteDocStale ? (
@@ -402,6 +769,40 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
           <p className="text-xs text-destructive">{docFileError}</p>
         ) : null}
       </div>
+      {candidate ? (
+        <div className="space-y-2 rounded-md border border-primary/35 bg-primary/5 p-3">
+          <p className="text-sm font-medium">
+            Pending AI diff in main document ({candidate.model})
+          </p>
+          <div className="max-h-72 overflow-y-auto rounded-md border bg-background p-2 text-xs font-mono">
+            {diffLines(
+              candidate.base_document_content ?? "",
+              candidate.candidate_document_content ?? ""
+            ).map((part, idx) => {
+              const lines = part.value.replace(/\n$/, "").split("\n");
+              return (
+                <div key={idx}>
+                  {lines.map((line, lineIdx) => (
+                    <div
+                      key={`${idx}-${lineIdx}`}
+                      className={cn(
+                        "whitespace-pre-wrap break-all px-1 py-0.5",
+                        part.added
+                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                          : part.removed
+                            ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                            : "text-muted-foreground/80"
+                      )}
+                    >
+                      {part.added ? "+" : part.removed ? "-" : " "} {line}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       <CollabMarkdownEditor
         className="min-h-0 flex-1"
         value={content}
@@ -429,6 +830,13 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
     <CollabDocChatPanel
       chatId={chatId}
       documentId={documentId}
+      documentChats={documentChats}
+      onSelectDocumentChat={(id) => {
+        setMobileMainTab("chat");
+        setActiveChatId(id);
+      }}
+      onNewDocumentChat={() => void handleNewChat()}
+      onDeleteDocumentChat={(id) => void handleDeleteChat(id)}
       title={title}
       content={content}
       modelId={modelId}
@@ -438,9 +846,9 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
       otherDocs={otherDocs}
       contextIds={contextIds}
       setContextIds={setContextIds}
-      contextOpen={contextOpen}
-      setContextOpen={setContextOpen}
       refreshDoc={refreshDoc}
+      candidate={candidate}
+      onCandidateChange={setCandidate}
     />
   );
 
@@ -463,6 +871,41 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
                 <Link href="/dashboard/documents">← Documents</Link>
               </Button>
             </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {tabsToRender.map((id) => {
+                const active = id === chatId;
+                return (
+                  <div
+                    key={id}
+                    className={cn(
+                      "inline-flex items-center rounded-md border",
+                      active ? "bg-accent" : "bg-background"
+                    )}
+                  >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-r-none px-3"
+                      onClick={() => setActiveChatId(id)}
+                    >
+                      {tabTitles[id] ?? "Document"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 rounded-l-none"
+                      onClick={() => handleCloseTab(id)}
+                      aria-label="Close tab"
+                      disabled={tabsToRender.length <= 1}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
 
             {loading ? (
               <p className="text-muted-foreground">Loading…</p>
@@ -470,7 +913,13 @@ export function CollabDocEditor({ chatId }: CollabDocEditorProps) {
               <p className="text-destructive">{loadError}</p>
             ) : (
               <>
-                <Tabs defaultValue="doc" className="lg:hidden flex flex-col flex-1 min-h-0">
+                <Tabs
+                  value={mobileMainTab}
+                  onValueChange={(v) =>
+                    setMobileMainTab(v === "chat" ? "chat" : "doc")
+                  }
+                  className="lg:hidden flex flex-col flex-1 min-h-0"
+                >
                   <TabsList>
                     <TabsTrigger value="doc">Document</TabsTrigger>
                     <TabsTrigger value="chat">Chat</TabsTrigger>

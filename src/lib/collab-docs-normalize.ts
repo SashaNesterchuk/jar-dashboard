@@ -13,7 +13,8 @@ export function normalizeDocumentListRow(
 ): CollabDocumentListRow {
   return {
     id: raw.id as string,
-    chat_id: raw.chat_id as string,
+    primary_chat_id: (raw.primary_chat_id as string | null) ?? null,
+    folder_id: (raw.folder_id as string | null) ?? null,
     title: raw.title as string | null,
     content: raw.content as string | null,
     created_at: raw.created_at as string,
@@ -27,7 +28,8 @@ export type DocWithChat = CollabDocument & { chats: CollabChat | null };
 export function normalizeDocWithChat(raw: Record<string, unknown>): DocWithChat {
   return {
     id: raw.id as string,
-    chat_id: raw.chat_id as string,
+    primary_chat_id: (raw.primary_chat_id as string | null) ?? null,
+    folder_id: (raw.folder_id as string | null) ?? null,
     title: raw.title as string | null,
     content: raw.content as string | null,
     created_at: raw.created_at as string,

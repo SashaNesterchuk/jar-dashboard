@@ -1,10 +1,20 @@
 "use client";
 
 import * as React from "react";
+import { diffLines } from "diff";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { ArrowUp, ChevronDown, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -13,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import {
   COLLAB_DEFAULT_MODEL_ID,
   COLLAB_MODELS,
@@ -25,12 +36,19 @@ import {
 import { aiContextDocumentIds } from "@/lib/collab-doc-ai-context";
 import { getDocsSupabaseBrowserClient } from "@/lib/docs-supabase";
 import { throttle } from "@/lib/throttle";
-import type { CollabMessage, CollabMessageMetadata } from "@/types/collab-docs";
-import { cn } from "@/lib/utils";
+import type {
+  CollabAiChangeCandidate,
+  CollabMessage,
+  CollabMessageMetadata,
+} from "@/types/collab-docs";
 
 export interface CollabDocChatPanelProps {
   chatId: string;
   documentId: string | null;
+  documentChats: { id: string; title: string | null }[];
+  onSelectDocumentChat: (chatId: string) => void;
+  onNewDocumentChat: () => void | Promise<void>;
+  onDeleteDocumentChat: (chatId: string) => void | Promise<void>;
   title: string;
   content: string;
   modelId: string;
@@ -40,14 +58,18 @@ export interface CollabDocChatPanelProps {
   otherDocs: { id: string; title: string | null }[];
   contextIds: string[];
   setContextIds: React.Dispatch<React.SetStateAction<string[]>>;
-  contextOpen: boolean;
-  setContextOpen: React.Dispatch<React.SetStateAction<boolean>>;
   refreshDoc: () => Promise<void>;
+  candidate: CollabAiChangeCandidate | null;
+  onCandidateChange: (next: CollabAiChangeCandidate | null) => void;
 }
 
 export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
   chatId,
   documentId,
+  documentChats,
+  onSelectDocumentChat,
+  onNewDocumentChat,
+  onDeleteDocumentChat,
   title,
   content,
   modelId,
@@ -57,14 +79,16 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
   otherDocs,
   contextIds,
   setContextIds,
-  contextOpen,
-  setContextOpen,
   refreshDoc,
+  candidate,
+  onCandidateChange,
 }: CollabDocChatPanelProps) {
   const [chatInput, setChatInput] = React.useState("");
   const [aiPending, setAiPending] = React.useState(false);
-  const [notePending, setNotePending] = React.useState(false);
   const [aiError, setAiError] = React.useState<string | null>(null);
+  const [candidatePending, setCandidatePending] = React.useState<
+    "apply" | "reject" | null
+  >(null);
 
   const [remotePeers, setRemotePeers] = React.useState<
     Record<string, { label: string; draft?: string }>
@@ -276,11 +300,18 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
           contextDocumentIds: contextIds.length ? contextIds : undefined,
         }),
       });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        candidate?: CollabAiChangeCandidate;
+      };
       if (!res.ok) {
         setAiError(json.error || `HTTP ${res.status}`);
       } else {
-        await refreshDoc();
+        if (!json.candidate) {
+          setAiError("No candidate in response");
+        } else {
+          onCandidateChange(json.candidate);
+        }
       }
     } catch (e) {
       setAiError(e instanceof Error ? e.message : "Request failed");
@@ -295,107 +326,104 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
     documentId,
     emitTypingDraft,
     modelId,
-    refreshDoc,
+    onCandidateChange,
     sendTypingBroadcast,
   ]);
 
-  const handleSendNote = React.useCallback(async () => {
-    const text = chatInput.trim();
-    if (!text || !documentId || notePending || aiPending) return;
-    setNotePending(true);
-    setAiError(null);
-    const supabase = getDocsSupabaseBrowserClient();
-    const { error } = await supabase.from("messages").insert({
-      chat_id: chatId,
-      role: "user",
-      content: text,
-      metadata: { note_only: true },
-    });
-    setChatInput("");
-    if (typingTimer.current) {
-      clearTimeout(typingTimer.current);
-      typingTimer.current = null;
-    }
-    emitTypingDraft.cancel();
-    sendTypingBroadcast(false);
-    if (error) setAiError(error.message);
-    setNotePending(false);
-  }, [
-    aiPending,
-    chatId,
-    chatInput,
-    documentId,
-    emitTypingDraft,
-    notePending,
-    sendTypingBroadcast,
-  ]);
+  const handleCandidateAction = React.useCallback(
+    async (action: "apply" | "reject") => {
+      if (!candidate || candidatePending) return;
+      setAiError(null);
+      setCandidatePending(action);
+      try {
+        const res = await fetch(`/api/collab-docs/candidates/${candidate.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          setAiError(json.error || `HTTP ${res.status}`);
+          return;
+        }
+        onCandidateChange(null);
+        if (action === "apply") {
+          await refreshDoc();
+        }
+      } catch (e) {
+        setAiError(e instanceof Error ? e.message : "Request failed");
+      } finally {
+        setCandidatePending(null);
+      }
+    },
+    [candidate, candidatePending, onCandidateChange, refreshDoc]
+  );
+
+  const diffPreview = React.useMemo(() => {
+    if (!candidate) return [];
+    return diffLines(
+      candidate.base_document_content ?? "",
+      candidate.candidate_document_content ?? ""
+    );
+  }, [candidate]);
+
+  const contextSummaryCount = documentId ? 1 + contextIds.length : contextIds.length;
 
   return (
     <div className="flex flex-col gap-3 min-h-0 h-full max-h-[70vh] lg:max-h-[calc(100vh-10rem)]">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 overflow-x-auto pb-0.5 shrink-0 -mx-0.5 px-0.5">
+        {documentChats.map((c, index) => {
+          const label = (c.title?.trim() || `Chat ${index + 1}`).slice(0, 28);
+          const active = c.id === chatId;
+          const canDelete = documentChats.length > 1;
+          return (
+            <div
+              key={c.id}
+              className={cn(
+                "group inline-flex h-8 shrink-0 items-center rounded-full text-xs",
+                active
+                  ? "bg-secondary text-secondary-foreground"
+                  : "hover:bg-accent"
+              )}
+            >
+              <button
+                type="button"
+                className="h-8 rounded-full pl-3 pr-2 text-xs outline-none"
+                onClick={() => onSelectDocumentChat(c.id)}
+              >
+                {label}
+              </button>
+              {canDelete ? (
+                <button
+                  type="button"
+                  className={cn(
+                    "mr-1 inline-flex size-5 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100",
+                    active && "opacity-70"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void onDeleteDocumentChat(c.id);
+                  }}
+                  aria-label="Close chat"
+                >
+                  <X className="size-3.5" />
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          onClick={() => setContextOpen((o) => !o)}
+          size="icon"
+          className="size-8 shrink-0 rounded-full"
+          disabled={!documentId}
+          onClick={() => void onNewDocumentChat()}
+          aria-label="New chat"
         >
-          Context (
-          {documentId ? 1 + contextIds.length : contextIds.length})
+          <Plus className="size-4" />
         </Button>
       </div>
-      {contextOpen ? (
-        <div className="rounded-md border p-2 max-h-48 overflow-y-auto space-y-3 text-sm">
-          <div className="space-y-1">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              This session
-            </p>
-            {documentId ? (
-              <div className="flex items-start gap-2 rounded-md bg-muted/40 px-2 py-1.5">
-                <Checkbox checked disabled className="mt-0.5" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">
-                    {title.trim() || "Untitled"}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground">
-                    Current document · always included for AI
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-xs">Loading document…</p>
-            )}
-          </div>
-          <div className="space-y-1 border-t pt-2">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Additional context
-            </p>
-            {otherDocs.length === 0 ? (
-              <p className="text-muted-foreground text-xs">
-                No other documents to attach.
-              </p>
-            ) : (
-              otherDocs.map((d) => (
-                <label
-                  key={d.id}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <Checkbox
-                    checked={contextIds.includes(d.id)}
-                    onCheckedChange={(c) => {
-                      setContextIds((prev) =>
-                        c === true
-                          ? [...prev, d.id]
-                          : prev.filter((x) => x !== d.id)
-                      );
-                    }}
-                  />
-                  <span className="truncate">{d.title || "Untitled"}</span>
-                </label>
-              ))
-            )}
-          </div>
-        </div>
-      ) : null}
 
       {Object.keys(remotePeers).length > 0 ? (
         <div className="space-y-2">
@@ -460,62 +488,194 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
         <p className="text-xs text-destructive">{aiError}</p>
       ) : null}
 
-      <div className="space-y-1">
-        <Textarea
-          value={chatInput}
-          onChange={(e) => onChatInputChange(e.target.value)}
-          placeholder="Message the team or ask the model to edit the document…"
-          className="min-h-[72px] text-sm"
-          disabled={aiPending || notePending}
-        />
-        <div className="flex flex-wrap gap-2">
+      {candidate ? (
+        <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium">AI proposal ({candidate.model})</p>
+              <p className="text-[11px] text-muted-foreground">
+                Review diff before applying changes
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={candidatePending !== null}
+                onClick={() => void handleCandidateAction("reject")}
+              >
+                {candidatePending === "reject" ? "Rejecting..." : "Reject"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={candidatePending !== null}
+                onClick={() => void handleCandidateAction("apply")}
+              >
+                {candidatePending === "apply" ? "Applying..." : "Apply"}
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs whitespace-pre-wrap">{candidate.chat_reply}</p>
+          <div className="max-h-56 overflow-y-auto rounded-md border bg-background p-2 text-xs font-mono">
+            {diffPreview.length === 0 ? (
+              <p className="text-muted-foreground">No changes.</p>
+            ) : (
+              diffPreview.map((part, idx) => {
+                const lines = part.value.replace(/\n$/, "").split("\n");
+                return (
+                  <div key={idx}>
+                    {lines.map((line, lineIdx) => (
+                      <div
+                        key={`${idx}-${lineIdx}`}
+                        className={cn(
+                          "whitespace-pre-wrap break-all px-1 py-0.5",
+                          part.added
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                            : part.removed
+                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                              : "text-muted-foreground/80"
+                        )}
+                      >
+                        {part.added ? "+" : part.removed ? "-" : " "} {line}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <div className="relative rounded-lg border bg-background shadow-sm">
+          <Textarea
+            value={chatInput}
+            onChange={(e) => onChatInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                void handleSend();
+              }
+            }}
+            placeholder="Ask or instruct the model… (⌘/Ctrl+Enter to send)"
+            className="min-h-[88px] resize-y border-0 pr-14 pb-3 text-sm shadow-none focus-visible:ring-0"
+            disabled={aiPending}
+          />
           <Button
             type="button"
-            size="sm"
-            variant="outline"
-            disabled={notePending || aiPending || !chatInput.trim()}
-            onClick={() => void handleSendNote()}
-          >
-            {notePending ? "Sending…" : "Send note"}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={aiPending || notePending || !chatInput.trim()}
+            size="icon"
+            variant={chatInput.trim() && !aiPending ? "default" : "secondary"}
+            className="absolute bottom-2 right-2 size-9 rounded-full"
+            disabled={aiPending || !chatInput.trim() || !documentId}
             onClick={() => void handleSend()}
+            aria-label="Send to AI"
           >
-            {aiPending ? "Waiting for AI…" : "Send to AI"}
+            <ArrowUp className="size-4" />
           </Button>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          Note: visible to everyone; AI: runs the model and may rewrite the
-          document.
+          AI may propose edits to the document. Review before applying.
         </p>
-      </div>
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1">
-          <Label className="text-xs">Model</Label>
-          <Select
-            value={modelId}
-            onValueChange={(v) => {
-              onModelIdChange(v);
-              void persistModel(v);
-            }}
-          >
-            <SelectTrigger size="sm" className="w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {COLLAB_MODELS.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+        <div className="flex flex-wrap gap-2 items-stretch">
+          <div className="flex min-w-[140px] flex-1 flex-col gap-1">
+            <Label htmlFor="collab-chat-model" className="text-xs text-muted-foreground">
+              Model
+            </Label>
+            <Select
+              value={modelId}
+              onValueChange={(v) => {
+                onModelIdChange(v);
+                void persistModel(v);
+              }}
+            >
+              <SelectTrigger id="collab-chat-model" size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {COLLAB_MODELS.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex min-w-[140px] flex-1 flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Context</Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-between font-normal"
+                  disabled={!documentId && otherDocs.length === 0}
+                >
+                  <span className="truncate">
+                    {documentId
+                      ? `Current + ${contextIds.length} extra`
+                      : `${contextIds.length} attached`}
+                  </span>
+                  <ChevronDown className="size-4 shrink-0 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-72" align="start">
+                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                  This document ({contextSummaryCount} sources for AI)
+                </DropdownMenuLabel>
+                {documentId ? (
+                  <DropdownMenuItem
+                    disabled
+                    className="flex cursor-default flex-col items-start gap-0.5 py-2 opacity-100"
+                  >
+                    <span className="truncate font-medium">
+                      {title.trim() || "Untitled"}
+                    </span>
+                    <span className="text-[10px] font-normal text-muted-foreground">
+                      Always included
+                    </span>
+                  </DropdownMenuItem>
+                ) : (
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                    Loading document…
+                  </p>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs">
+                  Additional documents
+                </DropdownMenuLabel>
+                {otherDocs.length === 0 ? (
+                  <p className="px-2 py-2 text-xs text-muted-foreground">
+                    No other documents.
+                  </p>
+                ) : (
+                  otherDocs.map((d) => (
+                    <DropdownMenuCheckboxItem
+                      key={d.id}
+                      checked={contextIds.includes(d.id)}
+                      onSelect={(e) => e.preventDefault()}
+                      onCheckedChange={(c) => {
+                        setContextIds((prev) =>
+                          c === true
+                            ? [...prev, d.id]
+                            : prev.filter((x) => x !== d.id)
+                        );
+                      }}
+                    >
+                      <span className="truncate">{d.title || "Untitled"}</span>
+                    </DropdownMenuCheckboxItem>
+                  ))
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
         {costHint ? (
-          <p className="text-xs text-muted-foreground max-w-[220px] leading-snug">
+          <p className="text-[10px] text-muted-foreground leading-snug">
             Est. cost: {costHint}
           </p>
         ) : null}

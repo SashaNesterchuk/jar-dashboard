@@ -1,0 +1,111 @@
+{
+  "request": {
+    "prompt": "создай один документ на основе двух",
+    "chatId": "e3cc05fd-7810-4f0e-84a0-9d1e9194d070",
+    "documentId": "55ac89a4-355e-436f-a13b-949e0d75cf77",
+    "contextDocumentIds": [
+      "6dd1fddc-b081-4910-b93d-9184eebd44b8",
+      "01dd5df4-6b2d-48bc-b29c-e24031405d4a"
+    ],
+    "modelId": "gpt-4o-mini"
+  },
+  "http": {
+    "status": 200,
+    "elapsedMs": 12911
+  },
+  "response": {
+    "ok": true,
+    "candidate": {
+      "id": "81c8e93b-55a8-467f-a01f-6be5a72de772",
+      "chat_id": "e3cc05fd-7810-4f0e-84a0-9d1e9194d070",
+      "document_id": "55ac89a4-355e-436f-a13b-949e0d75cf77",
+      "base_document_content": "# Бізнес-аналіз флоу та екранів на основі поведінки користувачів",
+      "candidate_document_content": "# Объединенный документ на основе анализов Mind Jar и поведения пользователей\n\n## 1. Призначення документа\n\nЦей документ описує продуктову логіку екранів застосунку `jar` на основі поточної навігації та route-структури в:\n\n- `app/_layout.tsx`\n- `app/(tabs)/_layout.tsx`\n- `app/ny/_layout.tsx`\n- окремих route-файлах з папки `app/`\n\nЦей звіт також включає аналіз поведінки користувачів на основі бойових даних.\n\n## 2. Аналіз поведінки користувачів\n\n### Що саме проаналізовано\n- У звіті залишено тільки бойові дані.\n- Період у файлі: від `2026-03-10` до `2026-04-14`.\n- Обсяг даних: `8 285` подій, `131` користувач.\n- Це аналіз тільки того, що видно в логах: де користувачі доходять до цінності, де зупиняються, що повторюють, що купують, і де втрачаються.\n\n### Короткий висновок\n- Найбільша бізнес-втрата починається в онбордингу: до його завершення доходять `40` із `63` користувачів, які в нього зайшли.\n- Найсильніший повторюваний сценарій у логах це mood check-in.\n\n## 3. Про продуктову логіку\n\n### Як побудована навігація\n- Root stack формує головний контейнер застосунку і тримає `onboarding` як стартовий обов'язковий flow.\n\n## 4. Важное по двум документам\n\n- Ключевые риски:\n  - Высокий уровень отсева пользователей на этапе онбординга.\n  - Низкая конверсия в покупки после просмотра экрана оплаты.\n- Узкие места в воронке:\n  - Проблемы с выборами эмоций в mood-flow.\n  - Слабое завершение дневниковых практик.\n- Сигналы удержания:\n  - Частые возвраты пользователей на mood check-in.\n  - Успешные покупки связаны с месячными планами.\n- Приоритеты на следующую неделю:\n  - Улучшить UI выбора эмоций.\n  - Проанализировать причины ранних отказов в процессе онбординга.\n  - Разработать стратегию для увеличения конверсии из просмотров в покупки.",
+      "model": "gpt-4o-mini",
+      "chat_reply": "Создал один документ на основе двух.",
+      "status": "pending",
+      "usage": {
+        "prompt_tokens": 9799,
+        "completion_tokens": 642
+      },
+      "latency_ms": 12564,
+      "created_at": "2026-04-17T13:59:12.809926+00:00",
+      "applied_at": null,
+      "applied_by": null
+    },
+    "runDiagnostics": {
+      "engine": "langgraph",
+      "available": true,
+      "run_id": "cf8fada4-13ff-4fbd-8904-5bcb9c0c40a3",
+      "stage": "complete",
+      "intent": "multi_doc_summary",
+      "language": "ru",
+      "retries": 0,
+      "selected_sources_count": 20,
+      "budget": {
+        "max_input_tokens": 90000,
+        "reserved_output_tokens": 4096,
+        "used_input_tokens": 3379
+      },
+      "validation": {
+        "structural_ok": true,
+        "language_ok": true,
+        "safety_ok": true,
+        "source_coverage_ok": true,
+        "issues": []
+      },
+      "diagnostics_count": 8,
+      "diagnostics_tail": [
+        {
+          "stage": "intent",
+          "code": "request.validated",
+          "message": "Request schema validated.",
+          "at_ms": 1776434340010
+        },
+        {
+          "stage": "intent",
+          "code": "intent.classified",
+          "message": "engine=langgraph; intent=multi_doc_summary; language=ru; confidence=0.90; reasons=The request involves merging or creating a document from multiple sources.,The language used is Russian, indicating a specific language intent.",
+          "at_ms": 1776434342108
+        },
+        {
+          "stage": "context_plan",
+          "code": "context.tier.selected",
+          "message": "tier=B_section; selected_sources=20; editable_chunks=1",
+          "at_ms": 1776434342332
+        },
+        {
+          "stage": "draft_plan",
+          "code": "plan.ready",
+          "message": "depth=normal; targets=1; confidence=0.79",
+          "at_ms": 1776434342332
+        },
+        {
+          "stage": "draft_plan",
+          "code": "prompt.composed",
+          "message": "Editable chunks: 1",
+          "at_ms": 1776434342332
+        },
+        {
+          "stage": "propose_patch",
+          "code": "llm.invoke.primary",
+          "message": "Calling model for primary patch proposal.",
+          "at_ms": 1776434342332
+        },
+        {
+          "stage": "validate",
+          "code": "validation.result",
+          "message": "validation=ok",
+          "at_ms": 1776434352572
+        },
+        {
+          "stage": "complete",
+          "code": "candidate.ready",
+          "message": "latency_ms=12564",
+          "at_ms": 1776434352572
+        }
+      ],
+      "latency_ms": 12564
+    }
+  }
+}

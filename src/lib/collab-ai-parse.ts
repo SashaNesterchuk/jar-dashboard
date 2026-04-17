@@ -2,7 +2,14 @@ import { z } from "zod";
 
 const collabAiPayloadSchema = z.object({
   chat_reply: z.string(),
-  document_markdown: z.string(),
+  patches: z
+    .array(
+      z.object({
+        target_chunk_index: z.number().int().nonnegative(),
+        new_text: z.string(),
+      })
+    )
+    .min(1),
 });
 
 export type CollabAiPayload = z.infer<typeof collabAiPayloadSchema>;

@@ -1,0 +1,111 @@
+{
+  "request": {
+    "prompt": "создай один документ на основе двух",
+    "chatId": "e3cc05fd-7810-4f0e-84a0-9d1e9194d070",
+    "documentId": "55ac89a4-355e-436f-a13b-949e0d75cf77",
+    "contextDocumentIds": [
+      "6dd1fddc-b081-4910-b93d-9184eebd44b8",
+      "01dd5df4-6b2d-48bc-b29c-e24031405d4a"
+    ],
+    "modelId": "gpt-4o-mini"
+  },
+  "http": {
+    "status": 200,
+    "elapsedMs": 24234
+  },
+  "response": {
+    "ok": true,
+    "candidate": {
+      "id": "95ce850e-3cd0-43f7-b49e-0ada365172f6",
+      "chat_id": "e3cc05fd-7810-4f0e-84a0-9d1e9194d070",
+      "document_id": "55ac89a4-355e-436f-a13b-949e0d75cf77",
+      "base_document_content": "# Бізнес-аналіз флоу та екранів на основі поведінки користувачів",
+      "candidate_document_content": "# Бізнес-аналіз флоу та екранів на основі поведінки користувачів\n\n## 1. Призначення документа\n\nЦей документ описує продуктову логіку екранів застосунку `jar` на основі поточної навігації та route-структури в:\n\n- `app/_layout.tsx`\n- `app/(tabs)/_layout.tsx`\n- `app/ny/_layout.tsx`\n- окремих route-файлах з папки `app/`\n\nДокумент потрібен, щоб:\n\n- швидко зрозуміти, які екрани реально існують у продукті;\n- зафіксувати, що саме робить кожен екран;\n- описати, що може зробити користувач на кожному екрані;\n- відокремити активні екрани від допоміжних, тимчасових і legacy-сценаріїв;\n- залишити місце, куди можна вручну дописати, навіщо саме цей екран або flow був придуманий.\n\n## 2. Як побудована навігація\n\n### 2.1 Root Stack — `app/_layout.tsx`\n\nRoot stack формує головний контейнер застосунку і тримає:\n\n- `onboarding` як стартовий обов'язковий flow;\n- `/(tabs)` як основну післяонбордингову навігацію;\n- standalone flow-екрани практик, summary, paywall, settings, history, achievements, seasonal `ny/*`;\n- кілька modal/transparentModal route для допоміжних дій: `emotion-tag`, `journey/view-modal`, `achievements/achieve-modal`, `jar-animation`.\n\nОкремо в root-рівні ще є технічна логіка:\n\n- ініціалізація шрифтів;\n- запуск провайдерів сесії, теми, analytics, toast, bottom sheet, portal;\n- `fetchInitialData()` до рендеру основної навігації;\n- глобальний PostHog;\n- глобальний toast/portal/bottom-sheet шар.\n\n## 3. Бізнес-аналіз поведінки користувачів за бойовим логом\n\n### Що саме проаналізовано\n\n- У звіті залишено тільки бойові дані.\n- Період у файлі: від `2026-03-10` до `2026-04-14`.\n- Обсяг даних: `8 285` подій, `131` користувач.\n- Це аналіз тільки того, що видно в логах: де користувачі доходять до цінності, де зупиняються, що повторюють, що купують, і де втрачаються.\n\n### Короткий висновок\n\n- Найбільша бізнес-втрата починається в онбордингу: до його завершення доходять `40` із `63` користувачів, які в нього зайшли.\n- Навіть після завершення онбордингу не всі доходять до реальної цінності: `18` із `40` не завершують жодної ключової дії після онбордингу.\n- Найсильніший повторюваний сценарій у логах це mood check-in: він і найчастіше завершується, і найкраще повертає користувача на інший день.\n- Найслабше місце у mood-flow це вибір емоцій.\n- У практиках найкраще запускаються квізи та щоденникові практики, але щоденник з онбордингу завершується слабо, а частина дихальних сценаріїв втрачає людей майже одразу.\n- У монетизації головна проблема не в нестачі показів екрана оплати, а в дуже слабкому переході з перегляду в покупку.\n- У логах усі зафіксовані успішні покупки пов’язані тільки з місячним планом. Річний план значно частіше обирають, але він не дає жодного зафіксованого успішного завершення.\n\n## 4. Важливе по двом документам\n\n- Ключові ризики: низька конверсія на етапах онбордингу та завершення ключових дій.\n- Узкие места в воронке: поганий вибір емоцій та слабке завершення щоденникових практик.\n- Сильные сигналы удержания: успешный mood check-in, высокая частота повторных взаимодействий.\n- Приоритет 1: оптимизировать процесс онбординга для повышения удержания пользователей.\n- Приоритет 2: провести анализ возможных улучшений в выборе эмоций.\n- Приоритет 3: увеличить видимость и доступность экрана оплаты для улучшения конверсии.",
+      "model": "gpt-4o-mini",
+      "chat_reply": "Создан документ на основе двух источников.",
+      "status": "pending",
+      "usage": {
+        "prompt_tokens": 10966,
+        "completion_tokens": 1154
+      },
+      "latency_ms": 23863,
+      "created_at": "2026-04-17T14:08:57.393459+00:00",
+      "applied_at": null,
+      "applied_by": null
+    },
+    "runDiagnostics": {
+      "engine": "langgraph",
+      "available": true,
+      "run_id": "8f44c63b-cb10-4cd4-98a1-301158f30fb6",
+      "stage": "complete",
+      "intent": "multi_doc_summary",
+      "language": "ru",
+      "retries": 0,
+      "selected_sources_count": 20,
+      "budget": {
+        "max_input_tokens": 90000,
+        "reserved_output_tokens": 4096,
+        "used_input_tokens": 3379
+      },
+      "validation": {
+        "structural_ok": true,
+        "language_ok": true,
+        "safety_ok": true,
+        "source_coverage_ok": true,
+        "issues": []
+      },
+      "diagnostics_count": 8,
+      "diagnostics_tail": [
+        {
+          "stage": "intent",
+          "code": "request.validated",
+          "message": "Request schema validated.",
+          "at_ms": 1776434913264
+        },
+        {
+          "stage": "intent",
+          "code": "intent.classified",
+          "message": "engine=langgraph; intent=multi_doc_summary; language=ru; confidence=0.90; reasons=User requests to create one document from two sources.,The request clearly indicates a synthesis or merging action.",
+          "at_ms": 1776434915097
+        },
+        {
+          "stage": "context_plan",
+          "code": "context.tier.selected",
+          "message": "tier=B_section; selected_sources=20; editable_chunks=1",
+          "at_ms": 1776434915309
+        },
+        {
+          "stage": "draft_plan",
+          "code": "plan.ready",
+          "message": "depth=deep; targets=1; confidence=0.79",
+          "at_ms": 1776434915309
+        },
+        {
+          "stage": "draft_plan",
+          "code": "prompt.composed",
+          "message": "Editable chunks: 1",
+          "at_ms": 1776434915309
+        },
+        {
+          "stage": "propose_patch",
+          "code": "llm.invoke.primary",
+          "message": "Calling model for primary patch proposal.",
+          "at_ms": 1776434915309
+        },
+        {
+          "stage": "validate",
+          "code": "validation.result",
+          "message": "validation=ok",
+          "at_ms": 1776434937126
+        },
+        {
+          "stage": "complete",
+          "code": "candidate.ready",
+          "message": "latency_ms=23863",
+          "at_ms": 1776434937126
+        }
+      ],
+      "latency_ms": 23863
+    }
+  }
+}
