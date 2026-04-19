@@ -1,9 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { diffLines } from "diff";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { ArrowUp, ChevronDown, Plus, X } from "lucide-react";
+import {
+  ArrowUp,
+  ChevronDown,
+  FileText,
+  Folder as FolderIcon,
+  Plus,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -38,9 +45,17 @@ import { getDocsSupabaseBrowserClient } from "@/lib/docs-supabase";
 import { throttle } from "@/lib/throttle";
 import type {
   CollabAiChangeCandidate,
+  CollabChatSkill,
+  CollabDocumentFolder,
+  CollabMentionItem,
   CollabMessage,
   CollabMessageMetadata,
 } from "@/types/collab-docs";
+import {
+  CollabChatMentionPicker,
+  type MentionPickerKeyboardApi,
+} from "@/components/collab-doc-editor/collab-chat-mention-picker";
+import { CollabDocDiffView } from "@/components/collab-doc-editor/collab-doc-diff-view";
 
 export interface CollabDocChatPanelProps {
   chatId: string;
@@ -61,6 +76,7 @@ export interface CollabDocChatPanelProps {
   refreshDoc: () => Promise<void>;
   candidate: CollabAiChangeCandidate | null;
   onCandidateChange: (next: CollabAiChangeCandidate | null) => void;
+  flushPendingDocumentSave?: () => Promise<void>;
 }
 
 export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
@@ -82,6 +98,7 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
   refreshDoc,
   candidate,
   onCandidateChange,
+  flushPendingDocumentSave,
 }: CollabDocChatPanelProps) {
   const [chatInput, setChatInput] = React.useState("");
   const [aiPending, setAiPending] = React.useState(false);
@@ -89,6 +106,49 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
   const [candidatePending, setCandidatePending] = React.useState<
     "apply" | "reject" | null
   >(null);
+
+  const [contextFolderIds, setContextFolderIds] = React.useState<string[]>([]);
+  const [skillId, setSkillId] = React.useState<string | null>(null);
+  const [allFolders, setAllFolders] = React.useState<CollabDocumentFolder[]>([]);
+  const [allSkills, setAllSkills] = React.useState<CollabChatSkill[]>([]);
+  const [mentionsLoaded, setMentionsLoaded] = React.useState(false);
+
+  const [mentionOpen, setMentionOpen] = React.useState(false);
+  const [mentionQuery, setMentionQuery] = React.useState("");
+  const mentionAnchorRef = React.useRef<number | null>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const pickerApiRef = React.useRef<MentionPickerKeyboardApi | null>(null);
+
+  const ensureMentionsLoaded = React.useCallback(async () => {
+    if (mentionsLoaded) return;
+    setMentionsLoaded(true);
+    const supabase = getDocsSupabaseBrowserClient();
+    const [{ data: folderRows }, { data: skillRows }] = await Promise.all([
+      supabase
+        .from("document_folders")
+        .select("id, name, parent_id, created_at, updated_at")
+        .order("name", { ascending: true }),
+      supabase
+        .from("chat_skills")
+        .select("id, slug, name, description, prompt, icon, sort_order")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
+    ]);
+    setAllFolders((folderRows ?? []) as CollabDocumentFolder[]);
+    setAllSkills((skillRows ?? []) as CollabChatSkill[]);
+  }, [mentionsLoaded]);
+
+  const folderMap = React.useMemo(() => {
+    const map = new Map<string, CollabDocumentFolder>();
+    for (const f of allFolders) map.set(f.id, f);
+    return map;
+  }, [allFolders]);
+
+  const skillMap = React.useMemo(() => {
+    const map = new Map<string, CollabChatSkill>();
+    for (const s of allSkills) map.set(s.id, s);
+    return map;
+  }, [allSkills]);
 
   const [remotePeers, setRemotePeers] = React.useState<
     Record<string, { label: string; draft?: string }>
@@ -263,6 +323,8 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
     const supabase = getDocsSupabaseBrowserClient();
     const metadata: CollabMessageMetadata = {
       context_document_ids: aiContextDocumentIds(documentId, contextIds),
+      context_folder_ids: contextFolderIds.length ? contextFolderIds : undefined,
+      skill_id: skillId ?? undefined,
     };
     const { data: ins, error: insErr } = await supabase
       .from("messages")
@@ -290,6 +352,16 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
     }
 
     try {
+      if (flushPendingDocumentSave) {
+        try {
+          await flushPendingDocumentSave();
+        } catch (flushErr) {
+          console.warn(
+            "collab-docs: flush pending document save failed",
+            flushErr
+          );
+        }
+      }
       const res = await fetch("/api/collab-docs/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -298,20 +370,26 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
           modelId,
           userMessageId: ins.id,
           contextDocumentIds: contextIds.length ? contextIds : undefined,
+          contextFolderIds: contextFolderIds.length
+            ? contextFolderIds
+            : undefined,
+          skillId: skillId ?? undefined,
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
         error?: string;
         candidate?: CollabAiChangeCandidate;
+        mode?: "answer_only" | string;
       };
       if (!res.ok) {
         setAiError(json.error || `HTTP ${res.status}`);
+      } else if (json.mode === "answer_only") {
+        // Assistant message is inserted server-side; realtime subscription
+        // will pick it up. No candidate is created for answer_only.
+      } else if (!json.candidate) {
+        setAiError("No candidate in response");
       } else {
-        if (!json.candidate) {
-          setAiError("No candidate in response");
-        } else {
-          onCandidateChange(json.candidate);
-        }
+        onCandidateChange(json.candidate);
       }
     } catch (e) {
       setAiError(e instanceof Error ? e.message : "Request failed");
@@ -323,11 +401,14 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
     chatInput,
     chatId,
     contextIds,
+    contextFolderIds,
+    skillId,
     documentId,
     emitTypingDraft,
     modelId,
     onCandidateChange,
     sendTypingBroadcast,
+    flushPendingDocumentSave,
   ]);
 
   const handleCandidateAction = React.useCallback(
@@ -359,15 +440,149 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
     [candidate, candidatePending, onCandidateChange, refreshDoc]
   );
 
-  const diffPreview = React.useMemo(() => {
-    if (!candidate) return [];
-    return diffLines(
-      candidate.base_document_content ?? "",
-      candidate.candidate_document_content ?? ""
-    );
-  }, [candidate]);
 
   const contextSummaryCount = documentId ? 1 + contextIds.length : contextIds.length;
+
+  const findMentionContext = React.useCallback(
+    (value: string, caret: number): { anchor: number; query: string } | null => {
+      if (caret <= 0) return null;
+      const before = value.slice(0, caret);
+      const atIdx = before.lastIndexOf("@");
+      if (atIdx < 0) return null;
+      const prevChar = atIdx === 0 ? "" : before[atIdx - 1];
+      if (prevChar && !/\s/.test(prevChar)) return null;
+      const between = before.slice(atIdx + 1);
+      if (/\s/.test(between)) return null;
+      return { anchor: atIdx, query: between };
+    },
+    []
+  );
+
+  const syncMentionFromInput = React.useCallback(
+    (value: string, caret: number) => {
+      const ctx = findMentionContext(value, caret);
+      if (!ctx) {
+        if (mentionOpen) setMentionOpen(false);
+        mentionAnchorRef.current = null;
+        return;
+      }
+      mentionAnchorRef.current = ctx.anchor;
+      setMentionQuery(ctx.query);
+      if (!mentionOpen) setMentionOpen(true);
+      void ensureMentionsLoaded();
+    },
+    [ensureMentionsLoaded, findMentionContext, mentionOpen]
+  );
+
+  const handleTextareaChange = React.useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const value = e.target.value;
+      const caret = e.target.selectionStart ?? value.length;
+      onChatInputChange(value);
+      syncMentionFromInput(value, caret);
+    },
+    [onChatInputChange, syncMentionFromInput]
+  );
+
+  const handleSelectionSync = React.useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    syncMentionFromInput(ta.value, ta.selectionStart ?? ta.value.length);
+  }, [syncMentionFromInput]);
+
+  const applyMention = React.useCallback(
+    (item: CollabMentionItem) => {
+      const anchor = mentionAnchorRef.current;
+      if (anchor === null) {
+        setMentionOpen(false);
+        return;
+      }
+      const ta = textareaRef.current;
+      const value = ta?.value ?? chatInput;
+      const caret = ta?.selectionStart ?? value.length;
+      const nextValue = value.slice(0, anchor) + value.slice(caret);
+      onChatInputChange(nextValue);
+      if (item.kind === "doc") {
+        setContextIds((prev) =>
+          prev.includes(item.id) ? prev : [...prev, item.id]
+        );
+      } else if (item.kind === "folder") {
+        setContextFolderIds((prev) =>
+          prev.includes(item.id) ? prev : [...prev, item.id]
+        );
+      } else if (item.kind === "skill") {
+        setSkillId(item.skill.id);
+      }
+      setMentionOpen(false);
+      setMentionQuery("");
+      mentionAnchorRef.current = null;
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        const pos = anchor;
+        el.setSelectionRange(pos, pos);
+      });
+    },
+    [chatInput, onChatInputChange, setContextIds]
+  );
+
+  const handleTextareaKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (mentionOpen) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          pickerApiRef.current?.moveDown();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          pickerApiRef.current?.moveUp();
+          return;
+        }
+        if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
+          if (pickerApiRef.current?.commit()) {
+            e.preventDefault();
+            return;
+          }
+        }
+        if (e.key === "Tab") {
+          if (pickerApiRef.current?.commit()) {
+            e.preventDefault();
+            return;
+          }
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setMentionOpen(false);
+          return;
+        }
+      }
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        void handleSend();
+      }
+    },
+    [handleSend, mentionOpen]
+  );
+
+  const removeContextDoc = React.useCallback(
+    (id: string) => {
+      setContextIds((prev) => prev.filter((x) => x !== id));
+    },
+    [setContextIds]
+  );
+  const removeContextFolder = React.useCallback((id: string) => {
+    setContextFolderIds((prev) => prev.filter((x) => x !== id));
+  }, []);
+  const removeSkill = React.useCallback(() => {
+    setSkillId(null);
+  }, []);
+
+  const hasAnyChips =
+    contextIds.length > 0 ||
+    contextFolderIds.length > 0 ||
+    skillId !== null;
 
   return (
     <div className="flex flex-col gap-3 min-h-0 h-full max-h-[70vh] lg:max-h-[calc(100vh-10rem)]">
@@ -518,49 +733,102 @@ export const CollabDocChatPanel = React.memo(function CollabDocChatPanel({
             </div>
           </div>
           <p className="text-xs whitespace-pre-wrap">{candidate.chat_reply}</p>
-          <div className="max-h-56 overflow-y-auto rounded-md border bg-background p-2 text-xs font-mono">
-            {diffPreview.length === 0 ? (
-              <p className="text-muted-foreground">No changes.</p>
-            ) : (
-              diffPreview.map((part, idx) => {
-                const lines = part.value.replace(/\n$/, "").split("\n");
-                return (
-                  <div key={idx}>
-                    {lines.map((line, lineIdx) => (
-                      <div
-                        key={`${idx}-${lineIdx}`}
-                        className={cn(
-                          "whitespace-pre-wrap break-all px-1 py-0.5",
-                          part.added
-                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                            : part.removed
-                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
-                              : "text-muted-foreground/80"
-                        )}
-                      >
-                        {part.added ? "+" : part.removed ? "-" : " "} {line}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <CollabDocDiffView
+            base={candidate.base_document_content ?? ""}
+            candidate={candidate.candidate_document_content ?? ""}
+            maxHeightClassName="max-h-56"
+          />
         </div>
       ) : null}
 
       <div className="space-y-2">
+        {hasAnyChips ? (
+          <div className="flex flex-wrap gap-1.5">
+            {contextIds.map((id) => {
+              const doc = otherDocs.find((d) => d.id === id);
+              const label = (doc?.title?.trim() || "Untitled").slice(0, 40);
+              return (
+                <span
+                  key={`doc:${id}`}
+                  className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2 pr-1 text-[11px]"
+                >
+                  <FileText className="size-3 opacity-70" />
+                  <span className="truncate max-w-56">{label}</span>
+                  <button
+                    type="button"
+                    className="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
+                    onClick={() => removeContextDoc(id)}
+                    aria-label="Remove document from context"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              );
+            })}
+            {contextFolderIds.map((id) => {
+              const folder = folderMap.get(id);
+              const label = folder?.name ?? "Folder";
+              return (
+                <span
+                  key={`folder:${id}`}
+                  className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2 pr-1 text-[11px]"
+                >
+                  <FolderIcon className="size-3 opacity-70" />
+                  <span className="truncate max-w-56">{label}</span>
+                  <button
+                    type="button"
+                    className="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
+                    onClick={() => removeContextFolder(id)}
+                    aria-label="Remove folder from context"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              );
+            })}
+            {skillId ? (
+              <span className="inline-flex items-center gap-1 rounded-full border bg-primary/10 py-0.5 pl-2 pr-1 text-[11px] text-primary">
+                <Sparkles className="size-3" />
+                <span className="truncate max-w-56">
+                  {skillMap.get(skillId)?.name ?? "Skill"}
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex size-4 items-center justify-center rounded-full text-primary/70 hover:bg-background hover:text-primary"
+                  onClick={removeSkill}
+                  aria-label="Remove skill"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <div className="relative rounded-lg border bg-background shadow-sm">
+          <CollabChatMentionPicker
+            open={mentionOpen}
+            query={mentionQuery}
+            docs={otherDocs}
+            folders={allFolders}
+            skills={allSkills}
+            excludeDocIds={contextIds}
+            excludeFolderIds={contextFolderIds}
+            selectedSkillId={skillId}
+            onSelect={applyMention}
+            onClose={() => setMentionOpen(false)}
+            navigateRef={pickerApiRef}
+          />
           <Textarea
+            ref={textareaRef}
             value={chatInput}
-            onChange={(e) => onChatInputChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                void handleSend();
-              }
+            onChange={handleTextareaChange}
+            onKeyDown={handleTextareaKeyDown}
+            onSelect={handleSelectionSync}
+            onClick={handleSelectionSync}
+            onBlur={() => {
+              window.setTimeout(() => setMentionOpen(false), 120);
             }}
-            placeholder="Ask or instruct the model… (⌘/Ctrl+Enter to send)"
+            placeholder="Ask or instruct the model… Type @ to add context. (⌘/Ctrl+Enter to send)"
             className="min-h-[88px] resize-y border-0 pr-14 pb-3 text-sm shadow-none focus-visible:ring-0"
             disabled={aiPending}
           />

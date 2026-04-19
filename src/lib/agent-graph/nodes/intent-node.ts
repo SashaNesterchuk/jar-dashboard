@@ -5,9 +5,12 @@ type IntentNodeInput = {
   state: AgentRunState;
   userText: string;
   contextDocumentCount: number;
+  /** Optional persona / skill text so the classifier can interpret the user’s hat. */
+  skillContext?: string | null;
   inferIntent: (args: {
     userText: string;
     contextDocumentCount: number;
+    skillContext?: string | null;
   }) => Promise<IntentNodeOutput>;
 };
 
@@ -38,6 +41,7 @@ export async function runIntentNode(input: IntentNodeInput): Promise<{
   const inferred = await input.inferIntent({
     userText: input.userText,
     contextDocumentCount: input.contextDocumentCount,
+    skillContext: input.skillContext,
   });
   const result = intentOutputSchema.parse(inferred);
   const nextState: AgentRunState = {

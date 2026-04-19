@@ -8,6 +8,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -16,6 +19,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Table,
   TableBody,
   TableCell,
@@ -23,6 +34,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { normalizeDocumentListRow } from "@/lib/collab-docs-normalize";
 import {
   COLLAB_IMPORT_MAX_BYTES,
@@ -49,6 +62,19 @@ function openChatForRow(row: CollabDocumentListRow): string | null {
   return row.primary_chat_id ?? row.chats?.id ?? null;
 }
 
+type AdminChatSkill = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  prompt: string;
+  icon: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export default function DocumentsPage() {
   const router = useRouter();
   const [rows, setRows] = React.useState<CollabDocumentListRow[]>([]);
@@ -66,6 +92,42 @@ export default function DocumentsPage() {
   const [listFileError, setListFileError] = React.useState<string | null>(null);
   const [configOk, setConfigOk] = React.useState(false);
   const importInputRef = React.useRef<HTMLInputElement>(null);
+
+  const [mainTab, setMainTab] = React.useState<"documents" | "skills">("documents");
+  const [adminSkills, setAdminSkills] = React.useState<AdminChatSkill[]>([]);
+  const [skillsLoading, setSkillsLoading] = React.useState(false);
+  const [skillsError, setSkillsError] = React.useState<string | null>(null);
+  const [skillSheetOpen, setSkillSheetOpen] = React.useState(false);
+  const [editingSkillId, setEditingSkillId] = React.useState<string | null>(null);
+  const [skillFormName, setSkillFormName] = React.useState("");
+  const [skillFormDescription, setSkillFormDescription] = React.useState("");
+  const [skillFormPrompt, setSkillFormPrompt] = React.useState("");
+  const [skillFormIcon, setSkillFormIcon] = React.useState("");
+  const [skillFormSort, setSkillFormSort] = React.useState(0);
+  const [skillFormActive, setSkillFormActive] = React.useState(true);
+  const [skillSaving, setSkillSaving] = React.useState(false);
+
+  const refreshSkills = React.useCallback(async () => {
+    setSkillsError(null);
+    setSkillsLoading(true);
+    try {
+      const res = await fetch("/api/collab-docs/skills");
+      const json = (await res.json()) as {
+        skills?: AdminChatSkill[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setAdminSkills(json.skills ?? []);
+    } catch (e) {
+      setSkillsError(e instanceof Error ? e.message : "Failed to load skills");
+    } finally {
+      setSkillsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (mainTab === "skills" && configOk) void refreshSkills();
+  }, [mainTab, configOk, refreshSkills]);
 
   React.useEffect(() => {
     const url = process.env.NEXT_PUBLIC_DOCS_SUPABASE_URL;
@@ -403,6 +465,127 @@ export default function DocumentsPage() {
     [refresh]
   );
 
+  const openNewSkill = React.useCallback(() => {
+    setEditingSkillId(null);
+    setSkillFormName("");
+    setSkillFormDescription("");
+    setSkillFormPrompt("");
+    setSkillFormIcon("");
+    setSkillFormSort(0);
+    setSkillFormActive(true);
+    setSkillsError(null);
+    setSkillSheetOpen(true);
+  }, []);
+
+  const openEditSkill = React.useCallback((s: AdminChatSkill) => {
+    setEditingSkillId(s.id);
+    setSkillFormName(s.name);
+    setSkillFormDescription(s.description ?? "");
+    setSkillFormPrompt(s.prompt);
+    setSkillFormIcon(s.icon ?? "");
+    setSkillFormSort(s.sort_order);
+    setSkillFormActive(s.is_active);
+    setSkillsError(null);
+    setSkillSheetOpen(true);
+  }, []);
+
+  const saveSkill = React.useCallback(async () => {
+    const name = skillFormName.trim();
+    const prompt = skillFormPrompt.trim();
+    if (!name || !prompt) return;
+    setSkillSaving(true);
+    setSkillsError(null);
+    try {
+      const body = {
+        name,
+        description: skillFormDescription.trim() || null,
+        prompt,
+        icon: skillFormIcon.trim() || null,
+        sort_order: skillFormSort,
+        is_active: skillFormActive,
+      };
+      if (editingSkillId) {
+        const res = await fetch(`/api/collab-docs/skills/${editingSkillId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      } else {
+        const res = await fetch("/api/collab-docs/skills", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      setSkillSheetOpen(false);
+      await refreshSkills();
+    } catch (e) {
+      setSkillsError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSkillSaving(false);
+    }
+  }, [
+    editingSkillId,
+    skillFormActive,
+    skillFormDescription,
+    skillFormIcon,
+    skillFormName,
+    skillFormPrompt,
+    skillFormSort,
+    refreshSkills,
+  ]);
+
+  const handleDeactivateSkill = React.useCallback(
+    async (s: AdminChatSkill) => {
+      const ok = window.confirm(
+        `Deactivate "${s.name}"? It will disappear from the @ picker in chat. You can re-activate it from Edit.`
+      );
+      if (!ok) return;
+      setSkillsError(null);
+      try {
+        const res = await fetch(`/api/collab-docs/skills/${s.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_active: false }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        await refreshSkills();
+      } catch (e) {
+        setSkillsError(e instanceof Error ? e.message : "Deactivate failed");
+      }
+    },
+    [refreshSkills]
+  );
+
+  const handleDeleteSkillPermanently = React.useCallback(
+    async (s: AdminChatSkill) => {
+      const ok = window.confirm(
+        `Permanently delete "${s.name}"? This cannot be undone. Old chat messages may still reference this skill id.`
+      );
+      if (!ok) return;
+      setSkillsError(null);
+      try {
+        const res = await fetch(`/api/collab-docs/skills/${s.id}`, {
+          method: "DELETE",
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        if (skillSheetOpen && editingSkillId === s.id) {
+          setSkillSheetOpen(false);
+        }
+        await refreshSkills();
+      } catch (e) {
+        setSkillsError(e instanceof Error ? e.message : "Delete failed");
+      }
+    },
+    [editingSkillId, refreshSkills, skillSheetOpen]
+  );
+
   return (
     <SidebarProvider
       style={
@@ -418,7 +601,20 @@ export default function DocumentsPage() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <div className="px-4 lg:px-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="px-4 lg:px-6">
+                <Tabs
+                  value={mainTab}
+                  onValueChange={(v) =>
+                    setMainTab(v === "skills" ? "skills" : "documents")
+                  }
+                  className="w-full gap-4"
+                >
+                  <TabsList>
+                    <TabsTrigger value="documents">Documents</TabsTrigger>
+                    <TabsTrigger value="skills">Skills</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="documents" className="mt-4 flex flex-col gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h1 className="text-3xl font-bold mb-2">Documents</h1>
                   <p className="text-muted-foreground max-w-2xl">
@@ -672,6 +868,197 @@ export default function DocumentsPage() {
                     )}
                   </TableBody>
                 </Table>
+              </div>
+                  </TabsContent>
+
+                  <TabsContent value="skills" className="mt-4 flex flex-col gap-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h1 className="text-3xl font-bold mb-2">Chat skills</h1>
+                        <p className="text-muted-foreground max-w-2xl">
+                          Preset personas for the document chat. Users attach one skill
+                          per message via @. Deactivate hides a skill from the picker;
+                          Delete removes it permanently.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={openNewSkill}
+                        disabled={!configOk}
+                      >
+                        New skill
+                      </Button>
+                    </div>
+                    {skillsError ? (
+                      <div className="text-sm text-destructive">{skillsError}</div>
+                    ) : null}
+                    {skillsLoading ? (
+                      <p className="text-sm text-muted-foreground">Loading…</p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Slug</TableHead>
+                            <TableHead>Active</TableHead>
+                            <TableHead>Sort</TableHead>
+                            <TableHead>Updated</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {adminSkills.length === 0 ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={6}
+                                className="text-center text-muted-foreground py-8"
+                              >
+                                No skills yet. Create one for the @ picker.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            adminSkills.map((s) => (
+                              <TableRow key={s.id}>
+                                <TableCell className="font-medium">{s.name}</TableCell>
+                                <TableCell className="text-muted-foreground text-sm font-mono">
+                                  {s.slug}
+                                </TableCell>
+                                <TableCell>{s.is_active ? "Yes" : "No"}</TableCell>
+                                <TableCell>{s.sort_order}</TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {formatDate(s.updated_at)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex flex-wrap justify-end gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openEditSkill(s)}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={!s.is_active}
+                                      onClick={() => void handleDeactivateSkill(s)}
+                                    >
+                                      Deactivate
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => void handleDeleteSkillPermanently(s)}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </TabsContent>
+                </Tabs>
+
+                <Sheet open={skillSheetOpen} onOpenChange={setSkillSheetOpen}>
+                  <SheetContent className="overflow-y-auto sm:max-w-lg">
+                    <SheetHeader>
+                      <SheetTitle>
+                        {editingSkillId ? "Edit skill" : "New skill"}
+                      </SheetTitle>
+                      <SheetDescription>
+                        Name and prompt are required. Prompt is injected into the AI
+                        system context; description helps intent routing.
+                      </SheetDescription>
+                    </SheetHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="skill-name">Name</Label>
+                        <Input
+                          id="skill-name"
+                          value={skillFormName}
+                          onChange={(e) => setSkillFormName(e.target.value)}
+                          placeholder="Product manager"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="skill-desc">Description</Label>
+                        <Input
+                          id="skill-desc"
+                          value={skillFormDescription}
+                          onChange={(e) => setSkillFormDescription(e.target.value)}
+                          placeholder="Short hint for routing"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="skill-prompt">Prompt</Label>
+                        <Textarea
+                          id="skill-prompt"
+                          className="min-h-[140px]"
+                          value={skillFormPrompt}
+                          onChange={(e) => setSkillFormPrompt(e.target.value)}
+                          placeholder="You are an experienced product manager…"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="skill-icon">Icon (optional)</Label>
+                        <Input
+                          id="skill-icon"
+                          value={skillFormIcon}
+                          onChange={(e) => setSkillFormIcon(e.target.value)}
+                          placeholder="briefcase"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="skill-sort">Sort order</Label>
+                        <Input
+                          id="skill-sort"
+                          type="number"
+                          value={skillFormSort}
+                          onChange={(e) =>
+                            setSkillFormSort(Number(e.target.value) || 0)
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="skill-active"
+                          checked={skillFormActive}
+                          onCheckedChange={(c) => setSkillFormActive(c === true)}
+                        />
+                        <Label htmlFor="skill-active" className="font-normal">
+                          Active (visible in @ picker)
+                        </Label>
+                      </div>
+                    </div>
+                    <SheetFooter className="gap-2 sm:justify-start">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setSkillSheetOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={
+                          skillSaving ||
+                          !skillFormName.trim() ||
+                          !skillFormPrompt.trim()
+                        }
+                        onClick={() => void saveSkill()}
+                      >
+                        {skillSaving ? "Saving…" : "Save"}
+                      </Button>
+                    </SheetFooter>
+                  </SheetContent>
+                </Sheet>
               </div>
             </div>
           </div>

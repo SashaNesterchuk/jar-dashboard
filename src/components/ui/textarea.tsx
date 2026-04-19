@@ -2,9 +2,16 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
+function Textarea({
+  className,
+  ref,
+  ...props
+}: React.ComponentProps<"textarea"> & {
+  ref?: React.Ref<HTMLTextAreaElement>
+}) {
   return (
     <textarea
+      ref={ref}
       data-slot="textarea"
       className={cn(
         "placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",

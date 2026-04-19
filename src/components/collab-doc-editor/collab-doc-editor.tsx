@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { diffLines } from "diff";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Download, Upload, X } from "lucide-react";
@@ -13,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CollabDocChatPanel } from "@/components/collab-doc-editor/collab-doc-chat-panel";
+import { CollabDocDiffView } from "@/components/collab-doc-editor/collab-doc-diff-view";
 import { CollabMarkdownEditor } from "@/components/collab-doc-editor/collab-markdown-editor";
 import {
   COLLAB_DEFAULT_MODEL_ID,
@@ -317,7 +317,7 @@ export function CollabDocEditor({ chatId: initialChatId }: CollabDocEditorProps)
           if (cancelled) return;
           const nextModelId =
             chatRow?.default_model &&
-            getCollabModel(chatRow.default_model as string)
+              getCollabModel(chatRow.default_model as string)
               ? (chatRow.default_model as string)
               : COLLAB_DEFAULT_MODEL_ID;
           setModelId(nextModelId);
@@ -358,21 +358,21 @@ export function CollabDocEditor({ chatId: initialChatId }: CollabDocEditorProps)
         }
         const rawDoc = chatRow.documents as
           | {
-              id: string;
-              folder_id?: string | null;
-              title?: string | null;
-              content?: string | null;
-              created_at?: string;
-              updated_at?: string;
-            }
+            id: string;
+            folder_id?: string | null;
+            title?: string | null;
+            content?: string | null;
+            created_at?: string;
+            updated_at?: string;
+          }
           | {
-              id: string;
-              folder_id?: string | null;
-              title?: string | null;
-              content?: string | null;
-              created_at?: string;
-              updated_at?: string;
-            }[]
+            id: string;
+            folder_id?: string | null;
+            title?: string | null;
+            content?: string | null;
+            created_at?: string;
+            updated_at?: string;
+          }[]
           | null;
         const docNested = Array.isArray(rawDoc) ? rawDoc[0] ?? null : rawDoc;
         if (!docNested?.id) {
@@ -453,15 +453,39 @@ export function CollabDocEditor({ chatId: initialChatId }: CollabDocEditorProps)
     [documentId]
   );
 
+  const pendingPersistRef = React.useRef<{
+    title?: string;
+    content?: string;
+  } | null>(null);
+
   const schedulePersist = React.useCallback(
     (patch: { title?: string; content?: string }) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      pendingPersistRef.current = {
+        ...(pendingPersistRef.current ?? {}),
+        ...patch,
+      };
       saveTimer.current = setTimeout(() => {
-        void persistDocument(patch);
+        const pending = pendingPersistRef.current;
+        pendingPersistRef.current = null;
+        saveTimer.current = null;
+        if (!pending) return;
+        void persistDocument(pending);
       }, 900);
     },
     [persistDocument]
   );
+
+  const flushPendingDocumentSave = React.useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const pending = pendingPersistRef.current;
+    pendingPersistRef.current = null;
+    if (!pending) return;
+    await persistDocument(pending);
+  }, [persistDocument]);
 
   const handleExportMarkdown = React.useCallback(() => {
     setDocFileError(null);
@@ -699,7 +723,7 @@ export function CollabDocEditor({ chatId: initialChatId }: CollabDocEditorProps)
         </div>
       ) : null}
       <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+        {/* <div className="flex flex-wrap items-center gap-2">
           <Label className="sr-only" htmlFor="doc-title">
             Title
           </Label>
@@ -764,7 +788,7 @@ export function CollabDocEditor({ chatId: initialChatId }: CollabDocEditorProps)
                     : ""}
             </span>
           </div>
-        </div>
+        </div> */}
         {docFileError ? (
           <p className="text-xs text-destructive">{docFileError}</p>
         ) : null}
@@ -774,33 +798,11 @@ export function CollabDocEditor({ chatId: initialChatId }: CollabDocEditorProps)
           <p className="text-sm font-medium">
             Pending AI diff in main document ({candidate.model})
           </p>
-          <div className="max-h-72 overflow-y-auto rounded-md border bg-background p-2 text-xs font-mono">
-            {diffLines(
-              candidate.base_document_content ?? "",
-              candidate.candidate_document_content ?? ""
-            ).map((part, idx) => {
-              const lines = part.value.replace(/\n$/, "").split("\n");
-              return (
-                <div key={idx}>
-                  {lines.map((line, lineIdx) => (
-                    <div
-                      key={`${idx}-${lineIdx}`}
-                      className={cn(
-                        "whitespace-pre-wrap break-all px-1 py-0.5",
-                        part.added
-                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                          : part.removed
-                            ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
-                            : "text-muted-foreground/80"
-                      )}
-                    >
-                      {part.added ? "+" : part.removed ? "-" : " "} {line}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
+          <CollabDocDiffView
+            base={candidate.base_document_content ?? ""}
+            candidate={candidate.candidate_document_content ?? ""}
+            maxHeightClassName="max-h-72"
+          />
         </div>
       ) : null}
       <CollabMarkdownEditor
@@ -849,6 +851,7 @@ export function CollabDocEditor({ chatId: initialChatId }: CollabDocEditorProps)
       refreshDoc={refreshDoc}
       candidate={candidate}
       onCandidateChange={setCandidate}
+      flushPendingDocumentSave={flushPendingDocumentSave}
     />
   );
 

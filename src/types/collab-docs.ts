@@ -37,6 +37,11 @@ export type CollabMessageUsage = {
 /** Optional fields for user messages (attached context); extra keys allowed. */
 export type CollabMessageMetadata = {
   context_document_ids?: string[];
+  context_folder_ids?: string[];
+  /** Single skill attached to this message (preferred). */
+  skill_id?: string | null;
+  /** @deprecated Legacy; prefer skill_id. */
+  skill_ids?: string[];
   context_excerpt?: string;
   estimated_cost_usd?: number;
   /** Human-only chat line (no AI call). */
@@ -108,3 +113,20 @@ export type CollabChunkBuild = {
   content_hash: string;
   keywords: string[];
 };
+
+/** Preset system context that a user can attach to a chat via the @ picker. */
+export type CollabChatSkill = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  prompt: string;
+  icon: string | null;
+  sort_order?: number;
+};
+
+/** Result item produced by the @-mention picker in the chat input. */
+export type CollabMentionItem =
+  | { kind: "doc"; id: string; title: string | null }
+  | { kind: "folder"; id: string; name: string; path?: string | null }
+  | { kind: "skill"; skill: CollabChatSkill };

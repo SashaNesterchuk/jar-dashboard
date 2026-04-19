@@ -61,7 +61,101 @@ const requestSchema = z.object({
   modelId: z.string().min(1),
   userMessageId: z.string().uuid(),
   contextDocumentIds: z.array(z.string().uuid()).max(8).optional(),
+  contextFolderIds: z.array(z.string().uuid()).max(8).optional(),
+  skillId: z.string().uuid().optional(),
 });
+
+const MAX_COMBINED_CONTEXT_DOCS = 32;
+const MAX_FOLDER_BFS_DEPTH = 6;
+
+type ChatSkillForRequest = {
+  id: string;
+  name: string;
+  description: string | null;
+  prompt: string;
+};
+
+function buildSkillIntentContext(skill: ChatSkillForRequest | null): string | null {
+  if (!skill) return null;
+  const persona = truncate(skill.prompt.trim(), 800);
+  const desc = skill.description?.trim();
+  const parts = [`Skill name: ${skill.name}`];
+  if (desc) parts.push(`Description: ${desc}`);
+  parts.push(`Persona (for routing): ${persona}`);
+  return parts.join("\n");
+}
+
+async function resolveFolderDocIds(
+  supabase: ReturnType<typeof getDocsSupabaseServiceClient>,
+  folderIds: string[]
+): Promise<string[]> {
+  if (!folderIds.length) return [];
+  const visited = new Set<string>();
+  let frontier = Array.from(new Set(folderIds));
+  for (const id of frontier) visited.add(id);
+  for (let depth = 0; depth < MAX_FOLDER_BFS_DEPTH && frontier.length > 0; depth += 1) {
+    const { data, error } = await supabase
+      .from("document_folders")
+      .select("id, parent_id")
+      .in("parent_id", frontier);
+    if (error) {
+      console.error("resolveFolderDocIds children query:", error);
+      break;
+    }
+    const nextFrontier: string[] = [];
+    for (const row of data ?? []) {
+      const id = row.id as string;
+      if (!id || visited.has(id)) continue;
+      visited.add(id);
+      nextFrontier.push(id);
+    }
+    frontier = nextFrontier;
+  }
+  const allFolderIds = Array.from(visited);
+  if (!allFolderIds.length) return [];
+  const { data: docs, error: docsErr } = await supabase
+    .from("documents")
+    .select("id")
+    .in("folder_id", allFolderIds);
+  if (docsErr) {
+    console.error("resolveFolderDocIds documents query:", docsErr);
+    return [];
+  }
+  return (docs ?? [])
+    .map((d) => (d as { id?: string }).id)
+    .filter((id): id is string => typeof id === "string");
+}
+
+async function loadSkillById(
+  supabase: ReturnType<typeof getDocsSupabaseServiceClient>,
+  skillId: string | undefined
+): Promise<ChatSkillForRequest | null> {
+  if (!skillId) return null;
+  const { data, error } = await supabase
+    .from("chat_skills")
+    .select("id, name, description, prompt, is_active")
+    .eq("id", skillId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) {
+    console.error("loadSkillById:", error);
+    return null;
+  }
+  if (!data) return null;
+  const r = data as {
+    id?: string;
+    name?: string;
+    description?: string | null;
+    prompt?: string;
+  };
+  if (!r.id || !r.name || !r.prompt?.trim()) return null;
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? null,
+    prompt: r.prompt,
+  };
+}
 
 const rateBuckets = new Map<string, number[]>();
 
@@ -95,6 +189,7 @@ function buildSystemPrompt(params: {
   planSummary?: string;
   planDepth?: "brief" | "normal" | "deep";
   planTargets?: string[];
+  skills?: { name: string; prompt: string }[];
 }): string {
   const editable = truncate(params.editableChunks, MAX_DOC_IN_PROMPT_CHARS);
   const ctx = params.contextBlocks || "(none)";
@@ -110,7 +205,23 @@ function buildSystemPrompt(params: {
 - For synthesis tasks, produce substantial content (multiple sections and rich bullet points), not a one-line stub.
 - Prefer expanding analysis over terse summaries unless user explicitly asks to be brief.`
       : "";
-  return `You are a collaborative Markdown document assistant for an internal dashboard.
+  const skillsBlock =
+    params.skills && params.skills.length > 0
+      ? `Active skills (perspective / voice to adopt when writing "chat_reply" and edits):
+${params.skills
+  .map(
+    (s, idx) =>
+      `- Skill ${idx + 1} (${s.name}): ${s.prompt.trim()}`
+  )
+  .join("\n")}
+
+The skill only influences the STYLE of "chat_reply" and the wording of edits you produce.
+It does NOT authorize you to delete, shorten, summarize, or restructure the document unless
+the user explicitly asked for that in the current request.
+
+`
+      : "";
+  return `${skillsBlock}You are a collaborative Markdown document assistant for an internal dashboard.
 
 Rules:
 - Apply the user's request by editing only EDITABLE CHUNKS below.
@@ -122,8 +233,12 @@ Rules:
 - Only use chunk indexes that exist in EDITABLE CHUNKS.
 - Return only changed chunks. Do not include unchanged chunks.
 - In "new_text", never include labels like "chunk_index", section wrappers, or any synthetic headers.
+- CRITICAL: "new_text" must be a FULL replacement for that chunk. Preserve the chunk's original
+  content verbatim and only modify what the user explicitly requested. NEVER truncate, shorten,
+  summarize, compress, or drop parts of the chunk. If the user did not ask to remove something,
+  it MUST stay in "new_text" exactly as it was.
 - Keep unrelated sections unchanged. Do not add new sections unless user explicitly requests to add them.
-- If user asks only a question without edits, still return one patch that keeps the best matching chunk unchanged.
+- If user asks only a question without edits, still return one patch that keeps the best matching chunk unchanged (byte-for-byte identical).
 
 Execution plan:
 - intent summary: ${planSummary}
@@ -149,6 +264,50 @@ function formatEditableChunks(chunks: CollabDocumentChunk[]): string {
       return `### chunk_index:${c.chunk_index}${section}\n${c.content}`;
     })
     .join("\n\n");
+}
+
+function buildAnswerOnlyPrompt(params: {
+  documentMarkdown: string;
+  documentTitle: string | null;
+  contextBlocks: string;
+  skills?: { name: string; prompt: string }[];
+}): string {
+  const doc = truncate(params.documentMarkdown, MAX_DOC_IN_PROMPT_CHARS);
+  const ctx = params.contextBlocks || "(none)";
+  const skillsBlock =
+    params.skills && params.skills.length > 0
+      ? `Active skills (adopt this perspective and voice in your reply):
+${params.skills
+  .map(
+    (s, idx) =>
+      `- Skill ${idx + 1} (${s.name}): ${s.prompt.trim()}`
+  )
+  .join("\n")}
+
+`
+      : "";
+  return `${skillsBlock}You are an assistant in a collaborative Markdown editor. The user is asking
+you to ANALYZE, REVIEW, or ANSWER A QUESTION about the current document. You MUST NOT modify
+the document. Return a plain-Markdown reply only — no JSON, no code fences around the whole
+answer, no "patches" field.
+
+Rules:
+- Reply in the same language as the latest user message.
+- Use clear Markdown: headings, bullet lists, short paragraphs. Be specific and reference the
+  document's sections when helpful.
+- Be thorough but focused: cover the points the user actually asked about, not everything.
+- If information is missing in the document, say so explicitly — do NOT invent it.
+- Do NOT output the document itself, do NOT rewrite or summarize it section-by-section unless
+  the user explicitly asked to.
+- Do NOT include "chunk_index" labels or any internal metadata.
+
+Attached context from other documents (for reference only):
+${ctx}
+
+CURRENT DOCUMENT (title: ${params.documentTitle?.trim() || "Untitled"}):
+---
+${doc}
+---`;
 }
 
 function sanitizeWritingMarkdown(raw: string): string {
@@ -463,12 +622,14 @@ async function runOpenAI(
   model: CollabModelDefinition,
   systemPrompt: string,
   turns: { role: "user" | "assistant"; content: string }[],
-  maxTokens: number
+  maxTokens: number,
+  options?: { jsonMode?: boolean }
 ) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
+  const jsonMode = options?.jsonMode ?? true;
   const openai = new OpenAI({ apiKey: key });
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
@@ -477,7 +638,7 @@ async function runOpenAI(
   const completion = await openai.chat.completions.create({
     model: model.id,
     messages,
-    response_format: { type: "json_object" },
+    ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
     max_tokens: maxTokens,
   });
   const text = completion.choices[0]?.message?.content;
@@ -545,7 +706,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const { chatId, modelId, userMessageId, contextDocumentIds } = parsed.data;
+    const {
+      chatId,
+      modelId,
+      userMessageId,
+      contextDocumentIds,
+      contextFolderIds,
+      skillId,
+    } = parsed.data;
     agentState = createInitialAgentRunState({
       chatId,
       userMessageId,
@@ -567,7 +735,7 @@ export async function POST(request: Request) {
 
     const { data: userMsg, error: userErr } = await supabase
       .from("messages")
-      .select("id, chat_id, role, content")
+      .select("id, chat_id, role, content, metadata")
       .eq("id", userMessageId)
       .single();
 
@@ -601,30 +769,85 @@ export async function POST(request: Request) {
       ...agentState,
       document_id: document.id,
     };
+
+    const folderExpandedDocIds = await resolveFolderDocIds(
+      supabase,
+      contextFolderIds ?? []
+    );
+    const combinedContextDocIds = Array.from(
+      new Set([
+        ...(contextDocumentIds ?? []),
+        ...folderExpandedDocIds,
+      ])
+    )
+      .filter((id) => id !== document.id)
+      .slice(0, MAX_COMBINED_CONTEXT_DOCS);
+
+    const activeSkill = await loadSkillById(supabase, skillId);
+    const skillIntentContext = buildSkillIntentContext(activeSkill);
+
+    {
+      const existingMeta =
+        (userMsg as { metadata?: Record<string, unknown> }).metadata ?? {};
+      const nextMeta: Record<string, unknown> = {
+        ...existingMeta,
+        context_document_ids: combinedContextDocIds,
+        context_folder_ids: contextFolderIds ?? [],
+        skill_id: skillId ?? null,
+      };
+      delete nextMeta.skill_ids;
+      const { error: metaErr } = await supabase
+        .from("messages")
+        .update({ metadata: nextMeta })
+        .eq("id", userMessageId);
+      if (metaErr) {
+        console.warn("user_message metadata update failed:", metaErr.message);
+      }
+    }
+
     if (AGENT_ENGINE === "langgraph") {
       const intentRun = await runIntentNode({
         state: agentState,
         userText: userMsg.content ?? "",
-        contextDocumentCount: (contextDocumentIds ?? []).length,
-        inferIntent: async ({ userText, contextDocumentCount }) => {
-          const systemPrompt = `Classify user request intent for collaborative markdown editor.
+        contextDocumentCount: combinedContextDocIds.length,
+        skillContext: skillIntentContext,
+        inferIntent: async ({ userText, contextDocumentCount, skillContext }) => {
+          const systemPrompt = `Classify user request intent for a collaborative markdown editor.
 Return ONLY JSON with keys:
 - intent: one of answer_only, edit_local, edit_with_context, multi_doc_summary, compare
 - language: ISO-like short code (ru, uk, en, unknown)
 - confidence: number 0..1
 - reasons: short array of reasons
 
-Guidance:
-- compare: asks to compare/contrast.
-- multi_doc_summary: asks to synthesize/merge/create one document from multiple sources.
-- edit_with_context: edit current doc with external context.
-- edit_local: edit current doc locally.
-- answer_only: question without explicit editing request.
+STRICT decision rules (apply in order):
+
+1. answer_only (DEFAULT for any read-only evaluation of the document):
+   - analyze / analyse / review / audit / critique / assess / evaluate / explain / describe / summarize without changing the doc
+   - "identify issues / weaknesses / risks / gaps / problems"
+   - "what can be improved", "what is missing", "give feedback", "дай разбор"
+   - Russian / Ukrainian verbs: проанализируй, проаналізуй, разбери, оцени, что думаешь, какие проблемы, что улучшить, дай фидбек, обзор
+   - Any question about the document that does NOT clearly request editing.
+   - A selected_skill (persona) does NOT change this: "проанализируй" with a Product Strategist persona is STILL answer_only.
+
+2. edit_local: user EXPLICITLY asks to modify the CURRENT document, without other sources.
+   - Verbs: rewrite, edit, fix, change, update, shorten, expand, add, remove, rename, restructure, переписать, исправить, изменить, обнови, сократи, добавь, убери, перепиши.
+   - They must name an action that modifies the document text.
+
+3. edit_with_context: explicit edit request AND user asks to pull info from other documents (@-mentions, "используй этот документ", "integrate findings from X").
+
+4. multi_doc_summary: explicit request to produce one NEW merged/synthesized document from multiple sources.
+
+5. compare: explicit request to compare/contrast items.
+
+If you are unsure between answer_only and any edit_* intent, CHOOSE answer_only. Editing is destructive and must be explicitly requested.
 `;
+          const skillBlock = skillContext?.trim()
+            ? `selected_skill<<<\n${skillContext}\n>>>\n`
+            : "";
           const classifyTurns: { role: "user" | "assistant"; content: string }[] = [
             {
               role: "user",
-              content: `context_document_count=${contextDocumentCount}\nrequest=${userText}`,
+              content: `${skillBlock}context_document_count=${contextDocumentCount}\nrequest=${userText}`,
             },
           ];
           const raw =
@@ -678,9 +901,7 @@ Guidance:
     let contextBlocks = "";
     let currentDocChunks: CollabDocumentChunk[] = [];
     let editableChunks: CollabDocumentChunk[] = [];
-    const selectedContextIds = (contextDocumentIds ?? []).filter(
-      (id) => id !== document.id
-    );
+    const selectedContextIds = combinedContextDocIds;
     const contextNode = await runContextNode({
       chatId,
       intent: agentState.intent,
@@ -754,6 +975,95 @@ Guidance:
     }
     if (editableChunks.length === 0) {
       editableChunks = [currentDocChunks[0]];
+    }
+
+    if (AGENT_ENGINE === "langgraph" && agentState.intent === "answer_only") {
+      try {
+        const fullDocMarkdown = currentDocChunks
+          .map((c) => c.content)
+          .join("\n\n")
+          .trim();
+        const answerSystemPrompt = buildAnswerOnlyPrompt({
+          documentMarkdown: fullDocMarkdown || document.content || "",
+          documentTitle: document.title,
+          contextBlocks,
+          skills: activeSkill
+            ? [{ name: activeSkill.name, prompt: activeSkill.prompt }]
+            : undefined,
+        });
+        const answer =
+          model.provider === "openai"
+            ? await runOpenAI(
+                model,
+                answerSystemPrompt,
+                turns,
+                MODEL_MAX_TOKENS_PRIMARY,
+                { jsonMode: false }
+              )
+            : await runAnthropic(
+                model,
+                answerSystemPrompt,
+                turns,
+                MODEL_MAX_TOKENS_PRIMARY
+              );
+        const replyText = answer.text.trim();
+        const { data: asstRow, error: asstErr } = await supabase
+          .from("messages")
+          .insert({
+            chat_id: chatId,
+            role: "assistant",
+            content: replyText,
+            model: model.id,
+            usage: answer.usage,
+            metadata: { intent: "answer_only" },
+          })
+          .select()
+          .single();
+        if (asstErr) {
+          console.error("collab-docs answer_only insert message:", asstErr);
+          return NextResponse.json(
+            { error: asstErr.message ?? "Failed to save assistant message" },
+            { status: 500 }
+          );
+        }
+
+        await supabase
+          .from("chats")
+          .update({ default_model: model.id })
+          .eq("id", chatId);
+
+        const latencyMs = Date.now() - startedAt;
+        agentState = pushAgentDiagnostic(agentState, {
+          stage: "complete",
+          code: "answer_only.delivered",
+          message: `latency_ms=${latencyMs}`,
+        });
+        const runDiagnostics = buildRunDiagnostics(
+          agentState,
+          latencyMs,
+          AGENT_ENGINE
+        );
+        return NextResponse.json({
+          ok: true,
+          mode: "answer_only",
+          message: asstRow,
+          runDiagnostics,
+        });
+      } catch (answerError) {
+        console.error(
+          "collab-docs answer_only path failed, falling back to patch flow:",
+          answerError,
+          { agentState }
+        );
+        agentState = pushAgentDiagnostic(agentState, {
+          stage: "repair",
+          code: "answer_only.fallback.patch",
+          message:
+            answerError instanceof Error
+              ? `answer_only failed, falling back to patch flow (${answerError.message}).`
+              : "answer_only failed, falling back to patch flow.",
+        });
+      }
     }
 
     const useResearchWritingPath =
@@ -1061,6 +1371,9 @@ Guidance:
       planSummary: agentState.plan?.summary,
       planDepth: agentState.plan?.depth,
       planTargets: agentState.plan?.targets,
+      skills: activeSkill
+        ? [{ name: activeSkill.name, prompt: activeSkill.prompt }]
+        : undefined,
     });
     agentState = pushAgentDiagnostic(agentState, {
       stage: "draft_plan",
