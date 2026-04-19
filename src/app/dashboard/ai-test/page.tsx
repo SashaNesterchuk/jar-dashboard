@@ -165,118 +165,183 @@ const MOOD_LABELS: Record<Mood, string> = {
 };
 
 // --- Onboarding Profile Types & Config ---
+// Canonical spec: MindJar consolidated documentation v1.3 — section C.1.9 (Q1–Q7).
+// Q1, Q3, Q4, Q5 — mandatory; Q2, Q6, Q7 — optional.
 
 interface OnboardingProfile {
   name: string;
-  age_range: string;
-  gender: string;
-  arrival_context: string[];
-  experience_level: string;
-  primary_goals: string[];
-  life_context: string[];
-  preferred_cadence: string;
+  primary_motivation: string[]; // Q1 — mandatory
+  pain_map: string[]; // Q2 — optional
+  focus_areas: string[]; // Q3 — mandatory, max 2
+  support_style: string; // Q4 — mandatory (declared preference)
+  realistic_action_modes: string[]; // Q5 section A — mandatory
+  daily_time_budget: string; // Q5 section B — mandatory
+  support_timing_preference: string; // Q6 — optional
+  avoided_topics: string[]; // Q7 — optional, privacy-sensitive
 }
 
 const STORAGE_KEY = "ai-test-onboarding-profile";
 
 const defaultProfile: OnboardingProfile = {
   name: "",
-  age_range: "",
-  gender: "",
-  arrival_context: [],
-  experience_level: "",
-  primary_goals: [],
-  life_context: [],
-  preferred_cadence: "",
+  primary_motivation: [],
+  pain_map: [],
+  focus_areas: [],
+  support_style: "",
+  realistic_action_modes: [],
+  daily_time_budget: "",
+  support_timing_preference: "",
+  avoided_topics: [],
 };
 
-const onboardingQuestions = {
-  age_range: {
-    title: "Скільки тобі років?",
-    slot: "age_range",
-    type: "single" as const,
-    options: ["14–17", "18–24", "25–34", "35–44", "45–54", "55+"],
-  },
-  gender: {
-    title: "Як до тебе звертатись?",
-    slot: "gender",
-    type: "single" as const,
-    options: ["Жінка", "Чоловік", "Небінарна людина", "Не хочу вказувати"],
-  },
-  arrival_context: {
-    title: "Що привело тебе сюди?",
-    subtitle: "Можна обрати кілька",
-    slot: "arrival_context",
-    type: "multi" as const,
+type SingleQuestion = {
+  type: "single";
+  title: string;
+  subtitle?: string;
+  optional?: boolean;
+  options: readonly string[];
+};
+
+type MultiQuestion = {
+  type: "multi";
+  title: string;
+  subtitle?: string;
+  optional?: boolean;
+  maxSelect?: number;
+  options: readonly string[];
+};
+
+type OnboardingQuestion = SingleQuestion | MultiQuestion;
+
+const onboardingQuestions: Record<
+  Exclude<keyof OnboardingProfile, "name">,
+  OnboardingQuestion
+> = {
+  // Q1 — mandatory
+  primary_motivation: {
+    type: "multi",
+    title: "Q1. Що привело тебе сюди?",
+    subtitle: "Можна обрати кілька (mandatory)",
     options: [
-      "Складний період у житті",
-      "Стрес або тривога",
-      "Хочу краще розуміти свої емоції",
-      "Хочу побудувати звичку рефлексії",
-      "Проблеми зі сном",
-      "Порадили знайомі",
-      "Просто цікаво",
+      "I feel anxious or overwhelmed",
+      "I want to understand my emotions better",
+      "I'm going through a difficult time",
+      "I want to build healthier habits",
+      "I'm just curious / exploring",
     ],
   },
-  experience_level: {
-    title: "Ти вже пробував щось подібне?",
-    slot: "experience_level",
-    type: "single" as const,
+  // Q2 — optional
+  pain_map: {
+    type: "multi",
+    title: "Q2. Що зараз дається найважче?",
+    subtitle: "Можна обрати кілька або пропустити (optional)",
+    optional: true,
     options: [
-      "Вперше щось подібне",
-      "Пробував трекери настрою",
-      "Практикую медитацію або дихання",
-      "Ходжу або ходив/ла до психолога",
-      "Маю досвід усвідомленої рефлексії",
+      "Stress",
+      "Overthinking",
+      "Low energy",
+      "Sleep",
+      "Anxiety",
+      "Relationships",
+      "Motivation",
+      "Burnout",
+      "Prefer not to say",
     ],
   },
-  primary_goals: {
-    title: "Що зараз для тебе найважливіше?",
-    subtitle: "Можна обрати кілька або пропустити",
-    slot: "primary_goals",
-    type: "multi" as const,
+  // Q3 — mandatory, max 2
+  focus_areas: {
+    type: "multi",
+    title: "Q3. На чому ти хочеш сфокусуватися в першу чергу?",
+    subtitle: "До 2 варіантів (mandatory)",
+    maxSelect: 2,
     options: [
-      "Розібратися у своїх емоціях",
-      "Знизити рівень стресу",
-      "Покращити сон",
-      "Зрозуміти свої тригери",
-      "Підтримати себе у складний період",
-      "Просто мати щоденну звичку",
-      "Ще не знаю",
+      "Managing stress and anxiety",
+      "Understanding my patterns",
+      "Building self-compassion",
+      "Improving sleep",
+      "Processing difficult feelings",
+      "Just checking in with myself daily",
     ],
   },
-  life_context: {
-    title: "Розкажи трохи про себе",
-    subtitle: "Можна обрати кілька",
-    slot: "life_context",
-    type: "multi" as const,
+  // Q4 — mandatory
+  support_style: {
+    type: "single",
+    title: "Q4. Який тип підтримки тобі зараз ближчий?",
+    subtitle: "Один варіант (mandatory)",
     options: [
-      "Навчаюсь",
-      "Працюю",
-      "Шукаю роботу / між проєктами",
-      "Виховую дітей",
-      "У стосунках / сім'ї",
-      "Живу самостійно",
-      "Доглядаю за близькими",
+      "Gentle and calming",
+      "Direct and practical",
+      "Reflective and thoughtful",
+      "Short and simple",
+      "A mix of these",
     ],
   },
-  preferred_cadence: {
-    title: "Коли тобі зручніше зупинитись і зробити чекін?",
-    slot: "preferred_cadence",
-    type: "single" as const,
-    options: ["Ранок", "Обід / день", "Вечір", "Перед сном", "Як вийде"],
+  // Q5 section A — mandatory
+  realistic_action_modes: {
+    type: "multi",
+    title: "Q5a. Які формати дій для тебе реалістичні?",
+    subtitle: "Можна обрати кілька (mandatory)",
+    options: [
+      "Quick check-ins",
+      "Short breathing exercises",
+      "A short chat with AI",
+      "Journaling",
+      "Self-discovery quizzes",
+      "Just one small step a day",
+    ],
   },
-} as const;
+  // Q5 section B — mandatory
+  daily_time_budget: {
+    type: "single",
+    title: "Q5b. Скільки часу на день готовий приділяти?",
+    subtitle: "Один варіант (mandatory)",
+    options: ["Less than 10 min", "10–30 min", "30–60 min", "Over 1 hour"],
+  },
+  // Q6 — optional
+  support_timing_preference: {
+    type: "single",
+    title: "Q6. Коли підтримка найчастіше потрібна?",
+    subtitle: "Один варіант (optional)",
+    optional: true,
+    options: [
+      "Morning",
+      "Midday",
+      "Evening",
+      "Late at night",
+      "When things get overwhelming",
+      "No specific time",
+    ],
+  },
+  // Q7 — optional, privacy-sensitive
+  avoided_topics: {
+    type: "multi",
+    title: "Q7. Чи є теми, до яких краще підходити дуже обережно?",
+    subtitle:
+      "Privacy-sensitive — повністю optional. Не рахується як одне з шести обов'язкових питань.",
+    optional: true,
+    options: [
+      "Loss / grief",
+      "Family conflict",
+      "Trauma",
+      "Body / appearance",
+      "Money / work pressure",
+      "Romantic relationships",
+      "Health concerns",
+      "None / I'll tell you later",
+    ],
+  },
+};
 
 const questionOrder: (keyof OnboardingProfile)[] = [
   "name",
-  "age_range",
-  "gender",
-  "arrival_context",
-  "experience_level",
-  "primary_goals",
-  "life_context",
-  "preferred_cadence",
+  "primary_motivation",
+  "pain_map",
+  "focus_areas",
+  "support_style",
+  "realistic_action_modes",
+  "daily_time_budget",
+  "support_timing_preference",
+  "avoided_topics",
 ];
 
 function loadProfile(): OnboardingProfile {
@@ -387,12 +452,18 @@ export default function AITestPage() {
   );
 
   const toggleMulti = useCallback(
-    (key: keyof OnboardingProfile, option: string) => {
+    (key: keyof OnboardingProfile, option: string, maxSelect?: number) => {
       setProfile((prev) => {
         const current = prev[key] as string[];
-        const next = current.includes(option)
-          ? current.filter((v) => v !== option)
-          : [...current, option];
+        let next: string[];
+        if (current.includes(option)) {
+          next = current.filter((v) => v !== option);
+        } else if (maxSelect && current.length >= maxSelect) {
+          // Drop the oldest selection to keep cap (mirrors C.1.9 Q3 max-2 rule).
+          next = [...current.slice(1), option];
+        } else {
+          next = [...current, option];
+        }
         const updated = { ...prev, [key]: next };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
         return updated;
@@ -1075,13 +1146,18 @@ export default function AITestPage() {
   const profileSummary = (() => {
     const parts: string[] = [];
     if (profile.name) parts.push(profile.name);
-    if (profile.age_range) parts.push(profile.age_range);
-    if (profile.gender) parts.push(profile.gender);
-    if (profile.arrival_context.length) parts.push(profile.arrival_context.join(", "));
-    if (profile.experience_level) parts.push(profile.experience_level);
-    if (profile.primary_goals.length) parts.push(profile.primary_goals.join(", "));
-    if (profile.life_context.length) parts.push(profile.life_context.join(", "));
-    if (profile.preferred_cadence) parts.push(profile.preferred_cadence);
+    if (profile.primary_motivation.length)
+      parts.push(profile.primary_motivation.join(", "));
+    if (profile.pain_map.length) parts.push(profile.pain_map.join(", "));
+    if (profile.focus_areas.length) parts.push(profile.focus_areas.join(", "));
+    if (profile.support_style) parts.push(profile.support_style);
+    if (profile.realistic_action_modes.length)
+      parts.push(profile.realistic_action_modes.join(", "));
+    if (profile.daily_time_budget) parts.push(profile.daily_time_budget);
+    if (profile.support_timing_preference)
+      parts.push(profile.support_timing_preference);
+    if (profile.avoided_topics.length)
+      parts.push(profile.avoided_topics.join(", "));
     return parts.length > 0 ? parts.join(" · ") : "Not configured";
   })();
 
@@ -1140,11 +1216,15 @@ export default function AITestPage() {
             </div>
 
             {questionOrder.filter((k) => k !== "name").map((key) => {
-              const q = onboardingQuestions[key as keyof typeof onboardingQuestions];
+              const q =
+                onboardingQuestions[key as Exclude<keyof OnboardingProfile, "name">];
               if (q.type === "single") {
                 return (
                   <div key={key} className="space-y-2">
                     <Label className="text-sm font-semibold">{q.title}</Label>
+                    {q.subtitle && (
+                      <p className="text-xs text-muted-foreground">{q.subtitle}</p>
+                    )}
                     <RadioGroup
                       value={(profile[key] as string) || ""}
                       onValueChange={(val) => updateProfile(key, val)}
@@ -1153,7 +1233,10 @@ export default function AITestPage() {
                       {q.options.map((opt) => (
                         <div key={opt} className="flex items-center gap-1.5">
                           <RadioGroupItem value={opt} id={`${key}-${opt}`} />
-                          <Label htmlFor={`${key}-${opt}`} className="cursor-pointer font-normal text-sm">
+                          <Label
+                            htmlFor={`${key}-${opt}`}
+                            className="cursor-pointer font-normal text-sm"
+                          >
                             {opt}
                           </Label>
                         </div>
@@ -1162,22 +1245,35 @@ export default function AITestPage() {
                   </div>
                 );
               }
-              const multiQ = q as { title: string; subtitle?: string; options: readonly string[] };
+              const selected = profile[key] as string[];
+              const atCap =
+                typeof q.maxSelect === "number" && selected.length >= q.maxSelect;
               return (
                 <div key={key} className="space-y-2">
-                  <Label className="text-sm font-semibold">{multiQ.title}</Label>
-                  {multiQ.subtitle && <p className="text-xs text-muted-foreground">{multiQ.subtitle}</p>}
+                  <Label className="text-sm font-semibold">{q.title}</Label>
+                  {q.subtitle && (
+                    <p className="text-xs text-muted-foreground">{q.subtitle}</p>
+                  )}
                   <div className="flex flex-wrap gap-2">
-                    {multiQ.options.map((opt) => {
-                      const checked = (profile[key] as string[]).includes(opt);
+                    {q.options.map((opt) => {
+                      const checked = selected.includes(opt);
+                      const disabled = !checked && atCap;
                       return (
                         <div key={opt} className="flex items-center gap-1.5">
                           <Checkbox
                             id={`${key}-${opt}`}
                             checked={checked}
-                            onCheckedChange={() => toggleMulti(key, opt)}
+                            disabled={disabled}
+                            onCheckedChange={() =>
+                              toggleMulti(key, opt, q.maxSelect)
+                            }
                           />
-                          <Label htmlFor={`${key}-${opt}`} className="cursor-pointer font-normal text-sm">
+                          <Label
+                            htmlFor={`${key}-${opt}`}
+                            className={`cursor-pointer font-normal text-sm ${
+                              disabled ? "text-muted-foreground/60" : ""
+                            }`}
+                          >
                             {opt}
                           </Label>
                         </div>
