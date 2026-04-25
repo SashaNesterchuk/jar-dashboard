@@ -1,7 +1,13 @@
 "use client";
 
+import * as React from "react";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -21,6 +27,37 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { useMemoryFeedback } from "@/lib/memory/hooks/useMemoryFeedback";
+import {
+  useMemoryStorage,
+  useMemorySubscription,
+  useMemoryTelemetry,
+} from "@/lib/memory/hooks/useMemoryContext";
+import {
+  useSessionSubmit,
+  type SessionSubmitInput,
+  type SessionSubmitResult,
+} from "@/lib/memory/hooks/useSessionSubmit";
+import {
+  useReflectionSubmit,
+  type ReflectionSubmitInput,
+} from "@/lib/memory/hooks/useReflectionSubmit";
+import { useOnboardingSubmit } from "@/lib/memory/hooks/useOnboardingSubmit";
+import type { Emotion, Tag } from "@/lib/memory/jarTypes";
+import type {
+  MemoryItem,
+  SessionSummaryV1Sync,
+  StableProfile,
+} from "@/lib/memory/types";
+import type {
+  OnboardingAnswers,
+  OnboardingTimeBudget,
+  OnboardingTimingPreference,
+} from "@/lib/memory/onboarding/types";
+import {
+  projectMemoryScreen,
+  type MemoryCardProjection,
+} from "@/lib/memory/ui/memoryView";
 import {
   pickSummaryFieldText,
   SummaryCardBlock,
@@ -39,6 +76,12 @@ import {
   emotionsPrimaryThenOthers,
   tagsForCategory,
 } from "@/utils/checkInCatalog";
+import {
+  SIM_CLIENT_METADATA,
+  formatJson,
+  generateUuid,
+  useSimUserId,
+} from "../_sim/sim-helpers";
 
 // --- Practice Types ---
 
@@ -71,35 +114,35 @@ const PRACTICE_CARDS: {
   icon: string;
   count: string;
 }[] = [
-  {
-    type: "journaling",
-    title: "Journaling",
-    description: "Guided journal prompts for self-reflection",
-    icon: "📝",
-    count: `${journals.length} practices`,
-  },
-  {
-    type: "self-discovery",
-    title: "Self-Discovery",
-    description: "Quiz-based personality & trait assessments",
-    icon: "🔍",
-    count: `${questionsNe.length} tests`,
-  },
-  {
-    type: "reflection",
-    title: "Reflection",
-    description: "Chat-style AI reflection conversations",
-    icon: "💬",
-    count: "40 prompts",
-  },
-  {
-    type: "check-in",
-    title: "Mood Check-in",
-    description: "Quick mood tracking with emotions & tags",
-    icon: "🎯",
-    count: "5 moods + emotions",
-  },
-];
+    {
+      type: "journaling",
+      title: "Journaling",
+      description: "Guided journal prompts for self-reflection",
+      icon: "📝",
+      count: `${journals.length} practices`,
+    },
+    {
+      type: "self-discovery",
+      title: "Self-Discovery",
+      description: "Quiz-based personality & trait assessments",
+      icon: "🔍",
+      count: `${questionsNe.length} tests`,
+    },
+    {
+      type: "reflection",
+      title: "Reflection",
+      description: "Chat-style AI reflection conversations",
+      icon: "💬",
+      count: "40 prompts",
+    },
+    {
+      type: "check-in",
+      title: "Mood Check-in",
+      description: "Quick mood tracking with emotions & tags",
+      icon: "🎯",
+      count: "5 moods + emotions",
+    },
+  ];
 
 // --- Reflection questions (from jar/events/reflection.ts) ---
 
@@ -181,6 +224,8 @@ interface OnboardingProfile {
 }
 
 const STORAGE_KEY = "ai-test-onboarding-profile";
+const MEMORY_STORAGE_KEY = "mindjar_memory_portal_store:v1";
+const SIM_USER_ID_KEY = "mindjar.sim.user_id:v1";
 
 const defaultProfile: OnboardingProfile = {
   name: "",
@@ -193,6 +238,96 @@ const defaultProfile: OnboardingProfile = {
   support_timing_preference: "",
   avoided_topics: [],
 };
+
+const TIME_BUDGET_BY_LABEL: Record<string, OnboardingTimeBudget> = {
+  "Less than 10 min": "lt_10_min",
+  "10–30 min": "10_30_min",
+  "30–60 min": "30_60_min",
+  "Over 1 hour": "gt_60_min",
+};
+
+const TIMING_BY_LABEL: Record<string, OnboardingTimingPreference> = {
+  Morning: "morning",
+  Midday: "midday",
+  Evening: "evening",
+  "Late at night": "late_night",
+  "When things get overwhelming": "when_overwhelming",
+  "No specific time": "no_specific_time",
+};
+
+function buildOnboardingAnswers(
+  profile: OnboardingProfile,
+): OnboardingAnswers {
+  return {
+    user_name: profile.name.trim() || undefined,
+    primary_motivation: profile.primary_motivation,
+    pain_map: profile.pain_map,
+    focus_areas: profile.focus_areas,
+    support_style: profile.support_style || undefined,
+    realistic_action_modes: profile.realistic_action_modes,
+    daily_time_budget: TIME_BUDGET_BY_LABEL[profile.daily_time_budget],
+    support_timing_preference: TIMING_BY_LABEL[profile.support_timing_preference],
+    avoided_topics: profile.avoided_topics,
+  };
+}
+
+function readTelemetrySnapshot(telemetry: unknown): unknown[] {
+  if (!telemetry || typeof telemetry !== "object") return [];
+  const history = (telemetry as { history?: unknown }).history;
+  return Array.isArray(history) ? history.slice(-20).reverse() : [];
+}
+
+function clearTelemetrySnapshot(telemetry: unknown): void {
+  if (!telemetry || typeof telemetry !== "object") return;
+  const history = (telemetry as { history?: unknown }).history;
+  if (Array.isArray(history)) history.length = 0;
+}
+
+interface ResettableMemoryStorage {
+  __reset?: () => void;
+}
+
+function downloadTextFile(filename: string, text: string): void {
+  if (typeof window === "undefined") return;
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function buildMemoryDebugText(input: {
+  exportedAt: string;
+  userId: string | null;
+  stableProfile: StableProfile | null;
+  summaries: SessionSummaryV1Sync[];
+  items: MemoryItem[];
+  telemetry: unknown[];
+  storageDump: unknown;
+}): string {
+  const sections: Array<[string, unknown]> = [
+    [
+      "metadata",
+      {
+        exported_at: input.exportedAt,
+        user_id: input.userId,
+      },
+    ],
+    ["stable_profile", input.stableProfile],
+    ["recent_summaries", input.summaries],
+    ["memory_items", input.items],
+    ["telemetry_tail", input.telemetry],
+    ["storage_dump", input.storageDump],
+  ];
+
+  return sections
+    .map(([title, value]) => `## ${title}\n${formatJson(value)}`)
+    .join("\n\n");
+}
 
 type SingleQuestion = {
   type: "single";
@@ -349,12 +484,31 @@ function loadProfile(): OnboardingProfile {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return { ...defaultProfile, ...JSON.parse(raw) };
-  } catch {}
+  } catch { }
   return defaultProfile;
 }
 
 const stripHtmlTags = (text: string): string => {
   return text.replace(/<[^>]*>/g, "");
+};
+
+const toMemoryTags = (labels: readonly string[]): Tag[] => {
+  const seen = new Set<string>();
+  return labels
+    .map((label) => stripHtmlTags(label).trim())
+    .filter((label) => label.length > 0)
+    .filter((label) => {
+      const key = label.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6)
+    .map((label) => ({
+      tKey: `practice.${label.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
+      label,
+      categoryId: "practice",
+    }));
 };
 
 const PRACTICE_HISTORY_KEY = "ai-test-practice-history";
@@ -366,6 +520,21 @@ type CompletedPracticeEntry = {
   practiceType: Exclude<PracticeType, "">;
   practiceLabel: string;
   aiResponse: unknown;
+  practiceInput?: unknown;
+  memoryRequest?: unknown;
+  memoryBefore?: unknown;
+  memoryAfter?: unknown;
+  memoryResult?: unknown;
+};
+
+type PracticeMemorySnapshot = {
+  capturedAt: string;
+  userId: string | null;
+  stableProfile: StableProfile | null;
+  summaries: SessionSummaryV1Sync[];
+  items: MemoryItem[];
+  telemetry: unknown[];
+  storageDump: unknown;
 };
 
 function newPracticeHistoryId(): string {
@@ -403,6 +572,11 @@ function loadPracticeHistory(): CompletedPracticeEntry[] {
         practiceType: e.practiceType as CompletedPracticeEntry["practiceType"],
         practiceLabel: e.practiceLabel,
         aiResponse: e.aiResponse,
+        practiceInput: e.practiceInput,
+        memoryRequest: e.memoryRequest,
+        memoryBefore: e.memoryBefore,
+        memoryAfter: e.memoryAfter,
+        memoryResult: e.memoryResult,
       });
     }
     return out;
@@ -416,12 +590,82 @@ function savePracticeHistory(entries: CompletedPracticeEntry[]) {
   localStorage.setItem(PRACTICE_HISTORY_KEY, JSON.stringify(entries));
 }
 
+function buildCompletedPracticeDebugText(input: {
+  exportedAt: string;
+  entries: CompletedPracticeEntry[];
+}): string {
+  return [
+    `# MindJar completed practices debug`,
+    `exported_at: ${input.exportedAt}`,
+    `entry_count: ${input.entries.length}`,
+    "",
+    ...input.entries.flatMap((entry, index) => [
+      `## Practice ${index + 1}: ${entry.practiceType} · ${entry.practiceLabel}`,
+      `id: ${entry.id}`,
+      `completed_at: ${entry.at}`,
+      "",
+      `### practice_input`,
+      formatJson(entry.practiceInput ?? null),
+      "",
+      `### memory_request`,
+      formatJson(entry.memoryRequest ?? null),
+      "",
+      `### memory_before`,
+      formatJson(entry.memoryBefore ?? null),
+      "",
+      `### memory_result`,
+      formatJson(entry.memoryResult ?? null),
+      "",
+      `### memory_after`,
+      formatJson(entry.memoryAfter ?? null),
+      "",
+      `### ai_response`,
+      formatJson(entry.aiResponse),
+      "",
+    ]),
+  ].join("\n");
+}
+
+function completedPracticeFilename(
+  prefix: string,
+  value: string,
+  exportedAt: string,
+): string {
+  const safeValue = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return `${prefix}-${safeValue || "practice"}-${exportedAt.replace(/[:.]/g, "-")}.txt`;
+}
+
 // ======================================================================
 
 export default function AITestPage() {
+  const [simUserId, setSimUserId] = useSimUserId();
+  const memoryStorage = useMemoryStorage();
+  const memorySubscription = useMemorySubscription();
+  const memoryTelemetry = useMemoryTelemetry();
+  const { submit: submitSession, isSubmitting: isSubmittingSession } =
+    useSessionSubmit(simUserId);
+  const { submit: submitReflection, isSubmitting: isSubmittingReflection } =
+    useReflectionSubmit(simUserId);
+  const {
+    submit: submitOnboarding,
+    isSubmitting: isSubmittingOnboarding,
+    error: onboardingSubmitError,
+  } = useOnboardingSubmit(simUserId);
+  const { submit: submitMemoryFeedback, isSubmitting: isApplyingFeedback } =
+    useMemoryFeedback(simUserId);
+
   // --- Profile ---
   const [profile, setProfile] = useState<OnboardingProfile>(defaultProfile);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [lastOnboardingItems, setLastOnboardingItems] = useState<
+    MemoryItem[] | null
+  >(null);
+  const [lastOnboardingProfile, setLastOnboardingProfile] =
+    useState<StableProfile | null>(null);
 
   useEffect(() => {
     const loaded = loadProfile();
@@ -475,6 +719,8 @@ export default function AITestPage() {
   const resetProfile = useCallback(() => {
     setProfile(defaultProfile);
     localStorage.removeItem(STORAGE_KEY);
+    setLastOnboardingItems(null);
+    setLastOnboardingProfile(null);
   }, []);
 
   // --- Practice state ---
@@ -486,6 +732,22 @@ export default function AITestPage() {
   // --- Reflection state ---
   const [selectedReflection, setSelectedReflection] = useState<ReflectionQuestion | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+
+  const [checkInResult, setCheckInResult] = useState<SessionSubmitResult | null>(
+    null,
+  );
+  const [checkInItems, setCheckInItems] = useState<MemoryItem[]>([]);
+  const [memoryInspectorOpen, setMemoryInspectorOpen] = useState(false);
+  const [memoryDebugOpen, setMemoryDebugOpen] = useState(false);
+  const [memoryProfileSnapshot, setMemoryProfileSnapshot] =
+    useState<StableProfile | null>(null);
+  const [memorySummaries, setMemorySummaries] = useState<
+    SessionSummaryV1Sync[]
+  >([]);
+  const [memoryStorageDump, setMemoryStorageDump] = useState<unknown>(null);
+  const [memoryTelemetrySnapshot, setMemoryTelemetrySnapshot] = useState<
+    unknown[]
+  >([]);
   const [chatInput, setChatInput] = useState("");
 
   // --- Check-in state ---
@@ -493,6 +755,153 @@ export default function AITestPage() {
   const [selectedEmotions, setSelectedEmotions] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [checkInNote, setCheckInNote] = useState("");
+
+  const refreshCheckInItems = useCallback(async () => {
+    if (!simUserId) return;
+    const all = await memoryStorage.getMemoryItems(simUserId);
+    setCheckInItems(all.filter((i) => i.status !== "removed_by_user"));
+  }, [memoryStorage, simUserId]);
+
+  const refreshInlineMemory = useCallback(async () => {
+    if (!simUserId) return;
+    const [items, stableProfile, summaries] = await Promise.all([
+      memoryStorage.getMemoryItems(simUserId),
+      memoryStorage.getStableProfile(simUserId),
+      memoryStorage.getRecentSessionSummaries(simUserId, 10),
+    ]);
+    setCheckInItems(items.filter((i) => i.status !== "removed_by_user"));
+    setMemoryProfileSnapshot(stableProfile);
+    setMemorySummaries(summaries);
+    setMemoryTelemetrySnapshot(readTelemetrySnapshot(memoryTelemetry));
+
+    if (typeof window !== "undefined") {
+      const raw = window.localStorage.getItem(MEMORY_STORAGE_KEY);
+      try {
+        setMemoryStorageDump(raw ? JSON.parse(raw) : null);
+      } catch {
+        setMemoryStorageDump(raw);
+      }
+    }
+  }, [memoryStorage, memoryTelemetry, simUserId]);
+
+  const capturePracticeMemorySnapshot = useCallback(async (): Promise<
+    PracticeMemorySnapshot
+  > => {
+    let storageDump: unknown = null;
+    if (typeof window !== "undefined") {
+      const raw = window.localStorage.getItem(MEMORY_STORAGE_KEY);
+      try {
+        storageDump = raw ? JSON.parse(raw) : null;
+      } catch {
+        storageDump = raw;
+      }
+    }
+
+    if (!simUserId) {
+      return {
+        capturedAt: new Date().toISOString(),
+        userId: null,
+        stableProfile: null,
+        summaries: [],
+        items: [],
+        telemetry: readTelemetrySnapshot(memoryTelemetry),
+        storageDump,
+      };
+    }
+
+    const [items, stableProfile, summaries] = await Promise.all([
+      memoryStorage.getMemoryItems(simUserId),
+      memoryStorage.getStableProfile(simUserId),
+      memoryStorage.getRecentSessionSummaries(simUserId, 10),
+    ]);
+
+    return {
+      capturedAt: new Date().toISOString(),
+      userId: simUserId,
+      stableProfile,
+      summaries,
+      items,
+      telemetry: readTelemetrySnapshot(memoryTelemetry),
+      storageDump,
+    };
+  }, [memoryStorage, memoryTelemetry, simUserId]);
+
+  const handleSubmitOnboarding = useCallback(async () => {
+    if (!simUserId) return;
+    const result = await submitOnboarding(buildOnboardingAnswers(profile));
+    setLastOnboardingItems(result.items);
+    setLastOnboardingProfile(result.stable_profile);
+    await refreshInlineMemory();
+  }, [profile, refreshInlineMemory, simUserId, submitOnboarding]);
+
+  const toggleMemoryInspector = useCallback(() => {
+    setMemoryInspectorOpen((current) => {
+      const next = !current;
+      if (next) void refreshInlineMemory();
+      return next;
+    });
+  }, [refreshInlineMemory]);
+
+  const toggleMemoryDebug = useCallback(() => {
+    setMemoryDebugOpen((current) => {
+      const next = !current;
+      if (next) void refreshInlineMemory();
+      return next;
+    });
+  }, [refreshInlineMemory]);
+
+  const handleDownloadMemoryDebug = useCallback(async () => {
+    const exportedAt = new Date().toISOString();
+    let items = checkInItems;
+    let stableProfile = memoryProfileSnapshot;
+    let summaries = memorySummaries;
+    let storageDump = memoryStorageDump;
+    const telemetry = readTelemetrySnapshot(memoryTelemetry);
+
+    if (simUserId) {
+      [items, stableProfile, summaries] = await Promise.all([
+        memoryStorage.getMemoryItems(simUserId),
+        memoryStorage.getStableProfile(simUserId),
+        memoryStorage.getRecentSessionSummaries(simUserId, 10),
+      ]);
+    }
+
+    if (typeof window !== "undefined") {
+      const raw = window.localStorage.getItem(MEMORY_STORAGE_KEY);
+      try {
+        storageDump = raw ? JSON.parse(raw) : null;
+      } catch {
+        storageDump = raw;
+      }
+    }
+
+    setCheckInItems(items.filter((i) => i.status !== "removed_by_user"));
+    setMemoryProfileSnapshot(stableProfile);
+    setMemorySummaries(summaries);
+    setMemoryTelemetrySnapshot(telemetry);
+    setMemoryStorageDump(storageDump);
+
+    downloadTextFile(
+      `mindjar-memory-debug-${exportedAt.replace(/[:.]/g, "-")}.txt`,
+      buildMemoryDebugText({
+        exportedAt,
+        userId: simUserId,
+        stableProfile,
+        summaries,
+        items,
+        telemetry,
+        storageDump,
+      }),
+    );
+  }, [
+    checkInItems,
+    memoryProfileSnapshot,
+    memoryStorage,
+    memoryStorageDump,
+    memorySummaries,
+    memoryTelemetry,
+    simUserId,
+  ]);
 
   const checkInEmotionGroups = useMemo((): ReturnType<
     typeof emotionsPrimaryThenOthers
@@ -506,6 +915,11 @@ export default function AITestPage() {
     const allowed = new Set(emotionsForMood(checkInMood).map((e) => e.label));
     setSelectedEmotions((prev) => prev.filter((l) => allowed.has(l)));
   }, [checkInMood]);
+
+  useEffect(() => {
+    if (!checkInResult) return;
+    void refreshCheckInItems();
+  }, [checkInResult, refreshCheckInItems]);
 
   // --- Shared state ---
   const [aiResponseData, setAiResponseData] = useState<unknown>(null);
@@ -549,9 +963,45 @@ export default function AITestPage() {
     setSelectedEmotions([]);
     setSelectedTags([]);
     setCheckInNote("");
+    setCheckInResult(null);
+    setCheckInItems([]);
     setAiResponseData(null);
     setError("");
   }, []);
+
+  const handleCleanEverything = useCallback(() => {
+    const confirmed =
+      typeof window === "undefined" ||
+      window.confirm(
+        "Clean everything? This removes all local memory, onboarding profile, completed practice history, telemetry tail, and resets the simulator user.",
+      );
+    if (!confirmed) return;
+
+    (memoryStorage as ResettableMemoryStorage).__reset?.();
+    clearTelemetrySnapshot(memoryTelemetry);
+
+    const nextUserId = generateUuid();
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(MEMORY_STORAGE_KEY);
+      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(PRACTICE_HISTORY_KEY);
+      window.localStorage.setItem(SIM_USER_ID_KEY, nextUserId);
+    }
+
+    setSimUserId(nextUserId);
+    setProfile(defaultProfile);
+    setProfileOpen(true);
+    setLastOnboardingItems(null);
+    setLastOnboardingProfile(null);
+    setPracticeHistory([]);
+    setPracticeType("");
+    resetPracticeState();
+    setCheckInItems([]);
+    setMemoryProfileSnapshot(null);
+    setMemorySummaries([]);
+    setMemoryStorageDump(null);
+    setMemoryTelemetrySnapshot([]);
+  }, [memoryStorage, memoryTelemetry, resetPracticeState, setSimUserId]);
 
   const handlePracticeTypeChange = (type: PracticeType) => {
     if (type === practiceType) {
@@ -708,71 +1158,9 @@ export default function AITestPage() {
       setLoading(true);
       setError("");
       setAiResponseData(null);
+      setCheckInResult(null);
 
-      const userId = `test-user-${Date.now()}`;
-      const eventId = `test-event-${Date.now()}`;
-
-      const hasProfile = Object.values(profile).some((v) =>
-        Array.isArray(v) ? v.length > 0 : v !== ""
-      );
-
-      const payload: any = {
-        userId,
-        eventId,
-        testMode: true,
-        practiceType,
-        ...(hasProfile && { onboardingProfile: profile }),
-      };
-
-      if (practiceType === "journaling") {
-        payload.journalSummary = {
-          journal: journalAnswers.filter((a) => a.answer?.trim()),
-        };
-      } else if (practiceType === "self-discovery") {
-        const quizTrait = calculateQuizTrait();
-        if (quizTrait) {
-          payload.quizSummary = { quizEvaluation: quizTrait };
-        }
-      } else if (practiceType === "reflection") {
-        const chatPairs: { question: string; answer: string }[] = [];
-        for (let i = 0; i < chatMessages.length; i++) {
-          const msg = chatMessages[i];
-          if (msg.role === "ai") {
-            const userMsg = chatMessages[i + 1];
-            chatPairs.push({
-              question: msg.text,
-              answer: userMsg?.role === "user" ? userMsg.text : "",
-            });
-          }
-        }
-        payload.reflectionSummary = {
-          chat: chatPairs.filter((p) => p.answer.trim()),
-          feedback: chatMessages
-            .filter((m) => m.role === "ai" && m.feedback)
-            .map((m) => ({ question: m.text, feedback: m.feedback })),
-        };
-      } else if (practiceType === "check-in") {
-        payload.checkInSummary = {
-          mood: checkInMood,
-          emotions: selectedEmotions,
-          tags: selectedTags,
-          note: checkInNote || undefined,
-        };
-      }
-
-      const res = await fetch("/api/ai-test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ function: "generate_ai_summary", payload }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Request failed");
-        return;
-      }
-
-      const practiceLabel = (() => {
+      const getPracticeLabel = () => {
         if (practiceType === "journaling" || practiceType === "self-discovery") {
           if (!selectedPractice) return practiceType;
           if (practiceType === "self-discovery") {
@@ -786,33 +1174,360 @@ export default function AITestPage() {
           return stripHtmlTags(String(title));
         }
         if (practiceType === "reflection") return "Reflection";
-        if (practiceType === "check-in") {
-          return checkInMood ? `Check-in (${checkInMood})` : "Check-in";
-        }
+        if (practiceType === "check-in") return `Check-in (${checkInMood})`;
         return String(practiceType);
-      })();
-
-      const entry: CompletedPracticeEntry = {
-        id: newPracticeHistoryId(),
-        at: new Date().toISOString(),
-        practiceType: practiceType as Exclude<PracticeType, "">,
-        practiceLabel,
-        aiResponse: data,
       };
-      setPracticeHistory((prev) => {
-        const base = prev.length > 0 ? prev : loadPracticeHistory();
-        const next = [entry, ...base].slice(0, PRACTICE_HISTORY_LIMIT);
-        savePracticeHistory(next);
-        return next;
-      });
 
-      setAiResponseData(data);
+      const buildAiData = (
+        functionName: string,
+        result: SessionSubmitResult,
+        extra?: Record<string, unknown>,
+      ) => {
+        const output = result.smart_summary?.output;
+        return {
+          success: true,
+          function: functionName,
+          result: output
+            ? {
+                insight: output.insight,
+                advice: output.advice,
+                affirmation: output.affirmation,
+                summary: output.summary,
+              }
+            : {
+                summary:
+                  "No smart summary generated for this session (skip/fallback).",
+              },
+          raw_session_result: result,
+          ...extra,
+        };
+      };
+
+      const recordPractice = (
+        practiceLabel: string,
+        aiResponse: unknown,
+        debug: Omit<
+          CompletedPracticeEntry,
+          "id" | "at" | "practiceType" | "practiceLabel" | "aiResponse"
+        > = {},
+      ) => {
+        const entry: CompletedPracticeEntry = {
+          id: newPracticeHistoryId(),
+          at: new Date().toISOString(),
+          practiceType: practiceType as Exclude<PracticeType, "">,
+          practiceLabel,
+          aiResponse,
+          ...debug,
+        };
+        setPracticeHistory((prev) => {
+          const base = prev.length > 0 ? prev : loadPracticeHistory();
+          const next = [entry, ...base].slice(0, PRACTICE_HISTORY_LIMIT);
+          savePracticeHistory(next);
+          return next;
+        });
+      };
+
+      // Use canonical memory check-in flow (local-first):
+      // submit session via memory hooks, then render summary.
+      if (practiceType === "check-in") {
+        if (!simUserId || !checkInMood) {
+          setError("Missing user or mood for memory check-in flow.");
+          return;
+        }
+        const now = new Date();
+        const emotions: Emotion[] = selectedEmotions.map((label) => ({
+          tKey: `emotion.${label}`,
+          label,
+        }));
+        const triggers: Tag[] = selectedTags.map((label) => ({
+          tKey: `trigger.${label}`,
+          label,
+          categoryId: "sim",
+        }));
+        const memoryRequest: SessionSubmitInput = {
+          session_id: generateUuid(),
+          user_id: simUserId,
+          started_at: new Date(now.getTime() - 60_000),
+          completed_at: now,
+          event_type: "mood",
+          check_in: {
+            mood: checkInMood,
+            reflection: checkInNote || undefined,
+          },
+          selected_emotions: emotions,
+          selected_triggers: triggers,
+          client_metadata: SIM_CLIENT_METADATA,
+        };
+        const memoryBefore = await capturePracticeMemorySnapshot();
+        const result = await submitSession(memoryRequest);
+        setCheckInResult(result);
+        await refreshCheckInItems();
+        await refreshInlineMemory();
+        const memoryAfter = await capturePracticeMemorySnapshot();
+
+        const aiData = buildAiData("memory_session_submit", result);
+        setAiResponseData(aiData);
+        recordPractice(getPracticeLabel(), aiData, {
+          practiceInput: {
+            mood: checkInMood,
+            emotions: selectedEmotions,
+            tags: selectedTags,
+            note: checkInNote,
+          },
+          memoryRequest,
+          memoryBefore,
+          memoryAfter,
+          memoryResult: result,
+        });
+        return;
+      }
+
+      if (practiceType === "journaling") {
+        if (!simUserId || !selectedPractice) {
+          setError("Missing user or journal for memory journaling flow.");
+          return;
+        }
+        const answered = journalAnswers.filter((a) => a.answer?.trim());
+        const practiceLabel = getPracticeLabel();
+        const userText = answered
+          .map((entry) => `Q: ${entry.question}\nA: ${entry.answer?.trim()}`)
+          .join("\n\n");
+        const now = new Date();
+        const memoryRequest: SessionSubmitInput = {
+          session_id: generateUuid(),
+          user_id: simUserId,
+          started_at: new Date(now.getTime() - 60_000),
+          completed_at: now,
+          event_type: "journaling",
+          check_in: {
+            mood: "ok",
+            reflection: userText,
+          },
+          user_stated_text: userText,
+          selected_triggers: toMemoryTags([
+            practiceLabel,
+            ...answered.map((entry) => entry.question),
+          ]),
+          practice_specific: {
+            practice_id: String(selectedPractice.id ?? practiceLabel),
+            effectiveness_self_report: null,
+            duration_seconds: null,
+          },
+          client_metadata: SIM_CLIENT_METADATA,
+        };
+        const memoryBefore = await capturePracticeMemorySnapshot();
+        const result = await submitSession(memoryRequest);
+        await refreshInlineMemory();
+        const memoryAfter = await capturePracticeMemorySnapshot();
+        const aiData = buildAiData("memory_session_submit_journal", result, {
+          journal_entries: answered,
+        });
+        setAiResponseData(aiData);
+        recordPractice(practiceLabel, aiData, {
+          practiceInput: {
+            selectedPractice,
+            journalAnswers: answered,
+            userText,
+          },
+          memoryRequest,
+          memoryBefore,
+          memoryAfter,
+          memoryResult: result,
+        });
+        return;
+      }
+
+      if (practiceType === "self-discovery") {
+        if (!simUserId || !selectedPractice) {
+          setError("Missing user or quiz for memory self-discovery flow.");
+          return;
+        }
+        const quizTrait = calculateQuizTrait();
+        if (!quizTrait) {
+          setError("Missing quiz result for memory self-discovery flow.");
+          return;
+        }
+        const practiceLabel = getPracticeLabel();
+        const answerText = questionAnswers
+          .map((answer) => `Answer: ${answer.label}`)
+          .join("\n");
+        const userText = [
+          `Self-discovery practice: ${practiceLabel}`,
+          `Result: ${quizTrait.title}`,
+          quizTrait.description ? `Interpretation: ${quizTrait.description}` : "",
+          answerText,
+        ]
+          .filter(Boolean)
+          .join("\n");
+        const now = new Date();
+        const memoryRequest: SessionSubmitInput = {
+          session_id: generateUuid(),
+          user_id: simUserId,
+          started_at: new Date(now.getTime() - 60_000),
+          completed_at: now,
+          event_type: "question",
+          check_in: {
+            mood: "ok",
+            reflection: userText,
+          },
+          user_stated_text: userText,
+          selected_triggers: toMemoryTags([practiceLabel, quizTrait.title]),
+          practice_specific: {
+            practice_id: String(selectedPractice.id ?? practiceLabel),
+            effectiveness_self_report: null,
+            duration_seconds: null,
+          },
+          client_metadata: SIM_CLIENT_METADATA,
+        };
+        const memoryBefore = await capturePracticeMemorySnapshot();
+        const result = await submitSession(memoryRequest);
+        await refreshInlineMemory();
+        const memoryAfter = await capturePracticeMemorySnapshot();
+        const aiData = buildAiData("memory_session_submit_self_discovery", result, {
+          quiz_result: quizTrait,
+          answers: questionAnswers,
+        });
+        setAiResponseData(aiData);
+        recordPractice(practiceLabel, aiData, {
+          practiceInput: {
+            selectedPractice,
+            quizTrait,
+            answers: questionAnswers,
+            userText,
+          },
+          memoryRequest,
+          memoryBefore,
+          memoryAfter,
+          memoryResult: result,
+        });
+        return;
+      }
+
+      if (practiceType === "reflection") {
+        if (!simUserId) {
+          setError("Missing user for memory reflection flow.");
+          return;
+        }
+        const chatPairs: { question: string; answer: string }[] = [];
+        for (let i = 0; i < chatMessages.length; i++) {
+          const msg = chatMessages[i];
+          if (msg.role === "ai") {
+            const userMsg = chatMessages[i + 1];
+            chatPairs.push({
+              question: msg.text,
+              answer: userMsg?.role === "user" ? userMsg.text : "",
+            });
+          }
+        }
+        const answered = chatPairs.filter((p) => p.answer.trim());
+        const userText = answered
+          .map((pair) => `Q: ${pair.question}\nA: ${pair.answer}`)
+          .join("\n\n");
+        const feedback = chatMessages
+          .filter((m) => m.role === "ai" && m.feedback)
+          .map((m) => ({ question: m.text, feedback: m.feedback }));
+        const now = new Date();
+        const memoryRequest: ReflectionSubmitInput = {
+          session_id: generateUuid(),
+          user_id: simUserId,
+          started_at: new Date(now.getTime() - 60_000),
+          completed_at: now,
+          event_type: "reflection",
+          check_in: {
+            mood: "ok",
+            reflection: userText,
+          },
+          user_stated_text: userText,
+          selected_triggers: toMemoryTags([
+            selectedReflection?.title ?? "Reflection",
+            ...answered.map((pair) => pair.question),
+          ]),
+          practice_specific: {
+            practice_id: selectedReflection?.id ?? "reflection",
+            effectiveness_self_report: null,
+            duration_seconds: null,
+          },
+          client_metadata: SIM_CLIENT_METADATA,
+        };
+        const memoryBefore = await capturePracticeMemorySnapshot();
+        const reflection = await submitReflection(memoryRequest);
+        await refreshInlineMemory();
+        const memoryAfter = await capturePracticeMemorySnapshot();
+        const aiData = buildAiData(
+          "memory_reflection_submit",
+          reflection.session,
+          {
+            reflection_summary: { chat: answered, feedback },
+            reinforced_items: reflection.reinforced_items,
+            signal_results: reflection.signal_results,
+          },
+        );
+        setAiResponseData(aiData);
+        recordPractice("Reflection", aiData, {
+          practiceInput: {
+            selectedReflection,
+            chatMessages,
+            chat: answered,
+            feedback,
+            userText,
+          },
+          memoryRequest,
+          memoryBefore,
+          memoryAfter,
+          memoryResult: reflection,
+        });
+        return;
+      }
+
+      setError("Unsupported practice type for canonical memory flow.");
     } catch (e: any) {
       setError(e.message || "An error occurred");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleCheckInResonance = useCallback(
+    async (kind: "like" | "dislike" | "echo_save") => {
+      if (!checkInResult) return;
+      const card = {
+        ...checkInResult.session_card,
+        reaction_to_output: {
+          ...checkInResult.session_card.reaction_to_output,
+          liked:
+            kind === "like"
+              ? true
+              : checkInResult.session_card.reaction_to_output.liked,
+          disliked:
+            kind === "dislike"
+              ? true
+              : checkInResult.session_card.reaction_to_output.disliked,
+          echo_saved:
+            kind === "echo_save"
+              ? true
+              : checkInResult.session_card.reaction_to_output.echo_saved,
+        },
+      };
+      await memoryStorage.saveSessionCard(card);
+      setCheckInResult({ ...checkInResult, session_card: card });
+    },
+    [checkInResult, memoryStorage],
+  );
+
+  const handleCheckInTruthReaction = useCallback(
+    async (
+      item: MemoryItem,
+      action: "yes_that_fits" | "not_quite" | "not_anymore" | "hide",
+    ) => {
+      await submitMemoryFeedback({
+        item,
+        action,
+        context_surface: "smart_summary",
+      });
+      await refreshCheckInItems();
+    },
+    [submitMemoryFeedback, refreshCheckInItems],
+  );
 
   // --- Render forms ---
 
@@ -953,9 +1668,8 @@ export default function AITestPage() {
               {chatMessages.map((msg, i) => (
                 <div key={i} className={`px-4 py-3 ${msg.role === "ai" ? "bg-muted/30" : ""}`}>
                   <div className="flex items-start gap-2">
-                    <span className={`mt-0.5 shrink-0 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                      msg.role === "ai" ? "bg-primary/10 text-primary" : "bg-foreground/10 text-foreground"
-                    }`}>
+                    <span className={`mt-0.5 shrink-0 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${msg.role === "ai" ? "bg-primary/10 text-primary" : "bg-foreground/10 text-foreground"
+                      }`}>
                       {msg.role === "ai" ? "AI" : "You"}
                     </span>
                     <p className="text-sm flex-1">{msg.text}</p>
@@ -965,18 +1679,16 @@ export default function AITestPage() {
                       <button
                         type="button"
                         onClick={() => setFeedback(i, "like")}
-                        className={`px-2 py-0.5 rounded text-xs transition-colors ${
-                          msg.feedback === "like" ? "bg-green-100 text-green-700" : "hover:bg-muted text-muted-foreground"
-                        }`}
+                        className={`px-2 py-0.5 rounded text-xs transition-colors ${msg.feedback === "like" ? "bg-green-100 text-green-700" : "hover:bg-muted text-muted-foreground"
+                          }`}
                       >
                         👍
                       </button>
                       <button
                         type="button"
                         onClick={() => setFeedback(i, "dislike")}
-                        className={`px-2 py-0.5 rounded text-xs transition-colors ${
-                          msg.feedback === "dislike" ? "bg-red-100 text-red-700" : "hover:bg-muted text-muted-foreground"
-                        }`}
+                        className={`px-2 py-0.5 rounded text-xs transition-colors ${msg.feedback === "dislike" ? "bg-red-100 text-red-700" : "hover:bg-muted text-muted-foreground"
+                          }`}
                       >
                         👎
                       </button>
@@ -1027,6 +1739,13 @@ export default function AITestPage() {
 
   const renderCheckInForm = () => (
     <div className="space-y-4">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>memory user:</span>
+        <code className="rounded bg-muted px-2 py-0.5">{simUserId ?? "…"}</code>
+        <Badge variant={memorySubscription.isPremiumActive ? "default" : "outline"}>
+          premium {memorySubscription.isPremiumActive ? "ON" : "OFF"}
+        </Badge>
+      </div>
       <div className="space-y-2">
         <Label>How are you feeling?</Label>
         <div className="flex flex-wrap gap-2">
@@ -1035,11 +1754,10 @@ export default function AITestPage() {
               key={mood}
               type="button"
               onClick={() => setCheckInMood(mood)}
-              className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
-                checkInMood === mood
+              className={`px-4 py-2 rounded-lg border text-sm transition-colors ${checkInMood === mood
                   ? "border-primary bg-primary/10 text-primary font-medium"
                   : "border-border hover:border-primary/50"
-              }`}
+                }`}
             >
               {MOOD_LABELS[mood]}
             </button>
@@ -1063,11 +1781,10 @@ export default function AITestPage() {
                       key={emotion.tKey}
                       type="button"
                       onClick={() => toggleEmotion(emotion.label)}
-                      className={`px-3 py-1.5 rounded-full border text-xs transition-colors ${
-                        selectedEmotions.includes(emotion.label)
+                      className={`px-3 py-1.5 rounded-full border text-xs transition-colors ${selectedEmotions.includes(emotion.label)
                           ? "border-primary bg-primary/10 text-primary font-medium"
                           : "border-border hover:border-primary/50"
-                      } ${!emotion.isVisible ? "opacity-80" : ""}`}
+                        } ${!emotion.isVisible ? "opacity-80" : ""}`}
                       title={emotion.isVisible ? undefined : "Extra emotion (hidden chip in app)"}
                     >
                       {emotion.label}
@@ -1083,11 +1800,10 @@ export default function AITestPage() {
                       key={emotion.tKey}
                       type="button"
                       onClick={() => toggleEmotion(emotion.label)}
-                      className={`px-3 py-1.5 rounded-full border text-xs transition-colors ${
-                        selectedEmotions.includes(emotion.label)
+                      className={`px-3 py-1.5 rounded-full border text-xs transition-colors ${selectedEmotions.includes(emotion.label)
                           ? "border-primary bg-primary/10 text-primary font-medium"
                           : "border-border hover:border-primary/50"
-                      } ${!emotion.isVisible ? "opacity-80" : ""}`}
+                        } ${!emotion.isVisible ? "opacity-80" : ""}`}
                       title={emotion.isVisible ? undefined : "Extra emotion (hidden chip in app)"}
                     >
                       {emotion.label}
@@ -1111,11 +1827,10 @@ export default function AITestPage() {
                         key={tag.tKey}
                         type="button"
                         onClick={() => toggleTag(tag.label)}
-                        className={`px-3 py-1.5 rounded-full border text-xs transition-colors ${
-                          selectedTags.includes(tag.label)
+                        className={`px-3 py-1.5 rounded-full border text-xs transition-colors ${selectedTags.includes(tag.label)
                             ? "border-primary bg-primary/10 text-primary font-medium"
                             : "border-border hover:border-primary/50"
-                        }`}
+                          }`}
                       >
                         {tag.label}
                       </button>
@@ -1161,359 +1876,975 @@ export default function AITestPage() {
     return parts.length > 0 ? parts.join(" · ") : "Not configured";
   })();
 
+  const memoryScreenView = useMemo(
+    () => projectMemoryScreen({ items: checkInItems, now: new Date() }),
+    [checkInItems],
+  );
+
+  const handleInlineMemoryReaction = useCallback(
+    async (
+      projection: MemoryCardProjection,
+      action: "yes_that_fits" | "not_quite" | "not_anymore" | "hide",
+    ) => {
+      await submitMemoryFeedback({
+        item: projection.item,
+        action,
+        context_surface: "memory_screen",
+      });
+      await refreshInlineMemory();
+    },
+    [refreshInlineMemory, submitMemoryFeedback],
+  );
+
+  const renderMemoryProjection = (projection: MemoryCardProjection) => (
+    <div
+      key={projection.item.id}
+      className="rounded-md border bg-background p-3 text-sm"
+      style={{ opacity: projection.opacity }}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        {projection.tier_label ? (
+          <Badge variant="outline">{projection.tier_label}</Badge>
+        ) : null}
+        <Badge variant="secondary">{projection.item.type}</Badge>
+      </div>
+      <p className="mt-2 font-medium">
+        {projection.softener ? `${projection.softener}: ` : ""}
+        {projection.item.statement_user_facing ??
+          projection.item.statement_internal}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={isApplyingFeedback}
+          onClick={() =>
+            handleInlineMemoryReaction(projection, "yes_that_fits")
+          }
+        >
+          Yes, that fits
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={isApplyingFeedback}
+          onClick={() => handleInlineMemoryReaction(projection, "not_quite")}
+        >
+          Not quite
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={isApplyingFeedback}
+          onClick={() => handleInlineMemoryReaction(projection, "not_anymore")}
+        >
+          Not anymore
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={isApplyingFeedback}
+          onClick={() => handleInlineMemoryReaction(projection, "hide")}
+        >
+          Hide
+        </Button>
+      </div>
+    </div>
+  );
+
   // ======================================================================
   // RENDER
   // ======================================================================
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold">AI Practice Tester</h1>
-        <p className="text-muted-foreground">
-          Test AI summary generation with all practice types
-        </p>
-      </div>
-
-      {/* Onboarding Profile */}
-      <Card>
-        <CardHeader
-          className="cursor-pointer select-none"
-          onClick={() => setProfileOpen((v) => !v)}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                User Profile (Onboarding)
-                <span className="text-xs font-normal text-muted-foreground">
-                  saved to localStorage
-                </span>
-              </CardTitle>
-              {!profileOpen && (
-                <CardDescription className="mt-1 truncate max-w-[600px]">
-                  {profileSummary}
-                </CardDescription>
-              )}
-            </div>
-            <span className="text-muted-foreground text-sm">
-              {profileOpen ? "▲ Collapse" : "▼ Expand"}
-            </span>
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar variant="inset" />
+      <SidebarInset>
+        <SiteHeader />
+        <div className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl font-bold">AI Practice Tester</h1>
+            <p className="text-muted-foreground">
+              Test AI summary generation with all practice types
+            </p>
           </div>
-        </CardHeader>
 
-        {profileOpen && (
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="profile-name" className="text-sm font-semibold">
-                Як тебе звати?
-              </Label>
-              <Input
-                id="profile-name"
-                placeholder="Введи своє ім'я"
-                value={profile.name}
-                onChange={(e) => updateProfile("name", e.target.value)}
-                className="max-w-xs"
-              />
-            </div>
+          {/* Onboarding Profile */}
+          <Card>
+            <CardHeader
+              className="cursor-pointer select-none"
+              onClick={() => setProfileOpen((v) => !v)}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    User Profile (Onboarding)
+                    <span className="text-xs font-normal text-muted-foreground">
+                      saved to localStorage
+                    </span>
+                  </CardTitle>
+                  {!profileOpen && (
+                    <CardDescription className="mt-1 truncate max-w-[600px]">
+                      {profileSummary}
+                    </CardDescription>
+                  )}
+                </div>
+                <span className="text-muted-foreground text-sm">
+                  {profileOpen ? "▲ Collapse" : "▼ Expand"}
+                </span>
+              </div>
+            </CardHeader>
 
-            {questionOrder.filter((k) => k !== "name").map((key) => {
-              const q =
-                onboardingQuestions[key as Exclude<keyof OnboardingProfile, "name">];
-              if (q.type === "single") {
-                return (
-                  <div key={key} className="space-y-2">
-                    <Label className="text-sm font-semibold">{q.title}</Label>
-                    {q.subtitle && (
-                      <p className="text-xs text-muted-foreground">{q.subtitle}</p>
-                    )}
-                    <RadioGroup
-                      value={(profile[key] as string) || ""}
-                      onValueChange={(val) => updateProfile(key, val)}
-                      className="flex flex-wrap gap-2"
+            {profileOpen && (
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="profile-name" className="text-sm font-semibold">
+                    Як тебе звати?
+                  </Label>
+                  <Input
+                    id="profile-name"
+                    placeholder="Введи своє ім'я"
+                    value={profile.name}
+                    onChange={(e) => updateProfile("name", e.target.value)}
+                    className="max-w-xs"
+                  />
+                </div>
+
+                {questionOrder.filter((k) => k !== "name").map((key) => {
+                  const q =
+                    onboardingQuestions[key as Exclude<keyof OnboardingProfile, "name">];
+                  if (q.type === "single") {
+                    return (
+                      <div key={key} className="space-y-2">
+                        <Label className="text-sm font-semibold">{q.title}</Label>
+                        {q.subtitle && (
+                          <p className="text-xs text-muted-foreground">{q.subtitle}</p>
+                        )}
+                        <RadioGroup
+                          value={(profile[key] as string) || ""}
+                          onValueChange={(val) => updateProfile(key, val)}
+                          className="flex flex-wrap gap-2"
+                        >
+                          {q.options.map((opt) => (
+                            <div key={opt} className="flex items-center gap-1.5">
+                              <RadioGroupItem value={opt} id={`${key}-${opt}`} />
+                              <Label
+                                htmlFor={`${key}-${opt}`}
+                                className="cursor-pointer font-normal text-sm"
+                              >
+                                {opt}
+                              </Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      </div>
+                    );
+                  }
+                  const selected = profile[key] as string[];
+                  const atCap =
+                    typeof q.maxSelect === "number" && selected.length >= q.maxSelect;
+                  return (
+                    <div key={key} className="space-y-2">
+                      <Label className="text-sm font-semibold">{q.title}</Label>
+                      {q.subtitle && (
+                        <p className="text-xs text-muted-foreground">{q.subtitle}</p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {q.options.map((opt) => {
+                          const checked = selected.includes(opt);
+                          const disabled = !checked && atCap;
+                          return (
+                            <div key={opt} className="flex items-center gap-1.5">
+                              <Checkbox
+                                id={`${key}-${opt}`}
+                                checked={checked}
+                                disabled={disabled}
+                                onCheckedChange={() =>
+                                  toggleMulti(key, opt, q.maxSelect)
+                                }
+                              />
+                              <Label
+                                htmlFor={`${key}-${opt}`}
+                                className={`cursor-pointer font-normal text-sm ${disabled ? "text-muted-foreground/60" : ""
+                                  }`}
+                              >
+                                {opt}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 p-3">
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      Submit runs canonical onboarding memory flow:
+                      <code className="ml-1 rounded bg-muted px-1">
+                        useOnboardingSubmit
+                      </code>
+                    </p>
+                    <p>
+                      sim user:{" "}
+                      <code className="rounded bg-muted px-1">
+                        {simUserId ?? "loading..."}
+                      </code>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {onboardingSubmitError ? (
+                      <Badge variant="destructive">
+                        Error: {onboardingSubmitError.message}
+                      </Badge>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      onClick={handleSubmitOnboarding}
+                      disabled={isSubmittingOnboarding || !simUserId}
                     >
-                      {q.options.map((opt) => (
-                        <div key={opt} className="flex items-center gap-1.5">
-                          <RadioGroupItem value={opt} id={`${key}-${opt}`} />
-                          <Label
-                            htmlFor={`${key}-${opt}`}
-                            className="cursor-pointer font-normal text-sm"
-                          >
-                            {opt}
-                          </Label>
+                      {isSubmittingOnboarding
+                        ? "Submitting..."
+                        : "Submit onboarding to memory"}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={resetProfile}>
+                      Reset Profile
+                    </Button>
+                  </div>
+                </div>
+
+                {lastOnboardingItems ? (
+                  <div className="rounded-md border bg-muted/10 p-3">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium">
+                          Persisted memory items · {lastOnboardingItems.length}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Created from onboarding answers via SSOT D.1.2.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {lastOnboardingItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="rounded-md border bg-background p-3 text-sm"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">{item.type}</Badge>
+                            <Badge variant="outline">
+                              conf {item.confidence.toFixed(2)}
+                            </Badge>
+                            <Badge variant="outline">{item.status}</Badge>
+                          </div>
+                          <p className="mt-2 font-medium">
+                            {item.statement_user_facing}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.statement_internal}
+                          </p>
                         </div>
                       ))}
-                    </RadioGroup>
+                    </div>
                   </div>
-                );
-              }
-              const selected = profile[key] as string[];
-              const atCap =
-                typeof q.maxSelect === "number" && selected.length >= q.maxSelect;
-              return (
-                <div key={key} className="space-y-2">
-                  <Label className="text-sm font-semibold">{q.title}</Label>
-                  {q.subtitle && (
-                    <p className="text-xs text-muted-foreground">{q.subtitle}</p>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    {q.options.map((opt) => {
-                      const checked = selected.includes(opt);
-                      const disabled = !checked && atCap;
-                      return (
-                        <div key={opt} className="flex items-center gap-1.5">
-                          <Checkbox
-                            id={`${key}-${opt}`}
-                            checked={checked}
-                            disabled={disabled}
-                            onCheckedChange={() =>
-                              toggleMulti(key, opt, q.maxSelect)
-                            }
-                          />
-                          <Label
-                            htmlFor={`${key}-${opt}`}
-                            className={`cursor-pointer font-normal text-sm ${
-                              disabled ? "text-muted-foreground/60" : ""
-                            }`}
-                          >
-                            {opt}
-                          </Label>
-                        </div>
-                      );
-                    })}
+                ) : null}
+
+                {lastOnboardingProfile ? (
+                  <div className="rounded-md border bg-muted/10 p-3">
+                    <p className="mb-2 text-sm font-medium">
+                      Stable profile snapshot
+                    </p>
+                    <pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs">
+                      {formatJson(lastOnboardingProfile)}
+                    </pre>
                   </div>
-                </div>
-              );
-            })}
-
-            <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={resetProfile}>
-                Reset Profile
-              </Button>
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      {/* Practice Type Cards */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        {PRACTICE_CARDS.map((card) => (
-          <button
-            key={card.type}
-            type="button"
-            onClick={() => handlePracticeTypeChange(card.type)}
-            className={`text-left rounded-xl border-2 p-4 transition-all ${
-              practiceType === card.type
-                ? "border-primary bg-primary/5 shadow-sm"
-                : "border-border hover:border-primary/40 hover:bg-muted/50"
-            }`}
-          >
-            <div className="text-2xl mb-2">{card.icon}</div>
-            <div className="font-semibold text-sm">{card.title}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{card.description}</div>
-            <div className="text-xs text-muted-foreground mt-2 font-medium">{card.count}</div>
-          </button>
-        ))}
-      </div>
-
-      {/* Practice Setup + Response */}
-      {practiceType && (
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            {(practiceType === "journaling" || practiceType === "self-discovery") && (
-              <CardHeader>
-                <CardTitle>
-                  {PRACTICE_CARDS.find((c) => c.type === practiceType)?.title}
-                </CardTitle>
-                <CardDescription>
-                  {practiceType === "journaling" && "Select a journal and fill in the prompts"}
-                  {practiceType === "self-discovery" && "Select a quiz and answer the questions"}
-                </CardDescription>
-              </CardHeader>
+                ) : null}
+              </CardContent>
             )}
-            <CardContent className="space-y-4">
-              {/* Practice selector for journaling & self-discovery */}
-              {(practiceType === "journaling" || practiceType === "self-discovery") && (
-                <div className="space-y-2">
-                  <Label>
-                    {practiceType === "journaling" ? "Journal" : "Quiz"}
-                  </Label>
-                  <Select
-                    value={selectedPractice?.id || ""}
-                    onValueChange={handlePracticeChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a practice..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {practiceType === "journaling"
-                        ? journals.map((journal) => (
-                            <SelectItem key={journal.id} value={journal.id}>
-                              {stripHtmlTags(journal.title)}
-                            </SelectItem>
-                          ))
-                        : questionsNe.map((question) => (
-                            <SelectItem key={question.id} value={question.id}>
-                              {getSelfDiscoveryTitleEn(String(question.tKey || "")) ||
-                                stripHtmlTags(question.title || question.tKey)}
-                            </SelectItem>
-                          ))}
-                    </SelectContent>
-                  </Select>
+          </Card>
+
+          {/* Memory screen + debug inline accordions */}
+          <Card>
+            <CardHeader
+              className="cursor-pointer select-none"
+              onClick={toggleMemoryInspector}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    Your Personalization
+                    <span className="text-xs font-normal text-muted-foreground">
+                      inline memory screen
+                    </span>
+                  </CardTitle>
+                  {!memoryInspectorOpen && (
+                    <CardDescription className="mt-1">
+                      {checkInItems.length} memory items available for this sim user
+                    </CardDescription>
+                  )}
                 </div>
-              )}
-
-              {/* Forms */}
-              <div className="max-h-[500px] overflow-y-auto">
-                {practiceType === "journaling" && selectedPractice && renderJournalingForm()}
-                {practiceType === "self-discovery" && selectedPractice && renderSelfDiscoveryForm()}
-                {practiceType === "reflection" && renderReflectionForm()}
-                {practiceType === "check-in" && renderCheckInForm()}
+                <span className="text-sm text-muted-foreground">
+                  {memoryInspectorOpen ? "▲ Collapse" : "▼ Expand"}
+                </span>
               </div>
+            </CardHeader>
+            {memoryInspectorOpen && (
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>sim user:</span>
+                    <code className="rounded bg-muted px-2 py-0.5">
+                      {simUserId ?? "loading..."}
+                    </code>
+                    <Badge
+                      variant={
+                        memorySubscription.isPremiumActive ? "default" : "outline"
+                      }
+                    >
+                      premium {memorySubscription.isPremiumActive ? "ON" : "OFF"}
+                    </Badge>
+                    {memoryProfileSnapshot ? (
+                      <Badge variant="outline">
+                        level {memoryProfileSnapshot.confidence_level}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void refreshInlineMemory();
+                    }}
+                  >
+                    Refresh memory
+                  </Button>
+                </div>
 
-              <Button
-                onClick={handleAnalyze}
-                disabled={!canAnalyze}
-                className="w-full"
-              >
-                {loading ? "Analyzing..." : "Analyze with AI"}
-              </Button>
+                {checkInItems.length === 0 ? (
+                  <p className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
+                    No memory yet. Submit onboarding above, then run a check-in.
+                  </p>
+                ) : (
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium">Basics</p>
+                        <p className="text-xs text-muted-foreground">
+                          Facts, preferences, constraints and boundaries.
+                        </p>
+                      </div>
+                      {[
+                        ...memoryScreenView.basics.facts,
+                        ...memoryScreenView.basics.declared_preferences,
+                        ...memoryScreenView.boundaries,
+                      ].length > 0 ? (
+                        [
+                          ...memoryScreenView.basics.facts,
+                          ...memoryScreenView.basics.declared_preferences,
+                          ...memoryScreenView.boundaries,
+                        ].map(renderMemoryProjection)
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No visible basics yet.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium">What tends to help</p>
+                        <p className="text-xs text-muted-foreground">
+                          Confirmed insights and active hypotheses.
+                        </p>
+                      </div>
+                      {memoryScreenView.helps.length > 0 ? (
+                        memoryScreenView.helps.map(renderMemoryProjection)
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No help patterns yet.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-3 lg:col-span-2">
+                      <div>
+                        <p className="text-sm font-medium">Patterns I&apos;m noticing</p>
+                        <p className="text-xs text-muted-foreground">
+                          Recent observations shown with soft language.
+                        </p>
+                      </div>
+                      {memoryScreenView.patterns.length > 0 ? (
+                        memoryScreenView.patterns.map(renderMemoryProjection)
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No recent patterns yet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {memoryScreenView.hidden_count > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {memoryScreenView.hidden_count} low-confidence or hidden item(s)
+                    are excluded from this user-facing projection.
+                  </p>
+                ) : null}
+              </CardContent>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader
+              className="cursor-pointer select-none"
+              onClick={toggleMemoryDebug}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    Memory debug
+                    <span className="text-xs font-normal text-muted-foreground">
+                      inline state/logs
+                    </span>
+                  </CardTitle>
+                  {!memoryDebugOpen && (
+                    <CardDescription className="mt-1">
+                      Raw memory state, recent summaries, stable profile and telemetry.
+                    </CardDescription>
+                  )}
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {memoryDebugOpen ? "▲ Collapse" : "▼ Expand"}
+                </span>
+              </div>
+            </CardHeader>
+            {memoryDebugOpen && (
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">items {checkInItems.length}</Badge>
+                    <Badge variant="secondary">
+                      summaries {memorySummaries.length}
+                    </Badge>
+                    <Badge variant="secondary">
+                      telemetry {memoryTelemetrySnapshot.length}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleCleanEverything();
+                      }}
+                    >
+                      Clean everything
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleDownloadMemoryDebug();
+                      }}
+                    >
+                      Download .txt
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void refreshInlineMemory();
+                      }}
+                    >
+                      Refresh debug
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Stable profile</p>
+                    <pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs">
+                      {formatJson(memoryProfileSnapshot)}
+                    </pre>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Recent summaries</p>
+                    <pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs">
+                      {formatJson(memorySummaries)}
+                    </pre>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Active memory items</p>
+                    <pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs">
+                      {formatJson(checkInItems)}
+                    </pre>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Telemetry tail</p>
+                    <pre className="max-h-80 overflow-auto rounded bg-muted p-3 text-xs">
+                      {formatJson(memoryTelemetrySnapshot)}
+                    </pre>
+                  </div>
+                  <div className="space-y-2 lg:col-span-2">
+                    <p className="text-sm font-medium">Storage dump</p>
+                    <pre className="max-h-96 overflow-auto rounded bg-muted p-3 text-xs">
+                      {formatJson(memoryStorageDump)}
+                    </pre>
+                  </div>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* Practice type (this page only — uses canonical local-first memory flow) */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Practice type</CardTitle>
+              <CardDescription>
+                Choose what to send to the AI tester below. Click again to clear.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2 pt-0">
+              {PRACTICE_CARDS.map((card) => (
+                <button
+                  key={card.type}
+                  type="button"
+                  onClick={() => handlePracticeTypeChange(card.type)}
+                  title={card.description}
+                  className={cn(
+                    "flex min-w-[140px] flex-1 flex-col items-start rounded-lg border px-3 py-2 text-left text-sm transition-colors sm:min-w-[160px]",
+                    practiceType === card.type
+                      ? "border-primary bg-primary/10 shadow-sm"
+                      : "border-border bg-background hover:bg-muted/60",
+                  )}
+                >
+                  <span className="text-lg leading-none">{card.icon}</span>
+                  <span className="mt-1 font-medium">{card.title}</span>
+                  <span className="text-[11px] text-muted-foreground">{card.count}</span>
+                </button>
+              ))}
             </CardContent>
           </Card>
 
-          {/* Response Section */}
+          {/* Practice Setup + Response */}
+          {practiceType && (
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                {(practiceType === "journaling" || practiceType === "self-discovery") && (
+                  <CardHeader>
+                    <CardTitle>
+                      {PRACTICE_CARDS.find((c) => c.type === practiceType)?.title}
+                    </CardTitle>
+                    <CardDescription>
+                      {practiceType === "journaling" && "Select a journal and fill in the prompts"}
+                      {practiceType === "self-discovery" && "Select a quiz and answer the questions"}
+                    </CardDescription>
+                  </CardHeader>
+                )}
+                <CardContent className="space-y-4">
+                  {/* Practice selector for journaling & self-discovery */}
+                  {(practiceType === "journaling" || practiceType === "self-discovery") && (
+                    <div className="space-y-2">
+                      <Label>
+                        {practiceType === "journaling" ? "Journal" : "Quiz"}
+                      </Label>
+                      <Select
+                        value={selectedPractice?.id || ""}
+                        onValueChange={handlePracticeChange}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a practice..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {practiceType === "journaling"
+                            ? journals.map((journal) => (
+                              <SelectItem key={journal.id} value={journal.id}>
+                                {stripHtmlTags(journal.title)}
+                              </SelectItem>
+                            ))
+                            : questionsNe.map((question) => (
+                              <SelectItem key={question.id} value={question.id}>
+                                {getSelfDiscoveryTitleEn(String(question.tKey || "")) ||
+                                  stripHtmlTags(question.title || question.tKey)}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Forms */}
+                  <div className="max-h-[500px] overflow-y-auto">
+                    {practiceType === "journaling" && selectedPractice && renderJournalingForm()}
+                    {practiceType === "self-discovery" && selectedPractice && renderSelfDiscoveryForm()}
+                    {practiceType === "reflection" && renderReflectionForm()}
+                    {practiceType === "check-in" && renderCheckInForm()}
+                  </div>
+
+                  <Button
+                    onClick={handleAnalyze}
+                    disabled={
+                      !canAnalyze ||
+                      isSubmittingSession ||
+                      isSubmittingReflection
+                    }
+                    className="w-full"
+                  >
+                    {practiceType === "check-in"
+                      ? isSubmittingSession
+                        ? "Submitting check-in..."
+                        : "Submit check-in (Memory flow)"
+                      : isSubmittingSession || isSubmittingReflection
+                        ? "Submitting to memory..."
+                      : loading
+                        ? "Analyzing..."
+                        : "Submit via Memory flow"}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Response Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>AI Response</CardTitle>
+                  <CardDescription>
+                    {practiceType === "check-in"
+                      ? "Canonical memory check-in flow (session submit -> smart summary -> memory feedback)."
+                      : "Canonical memory session flow (session submit -> retrieval -> smart summary)."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {error && (
+                    <div className="rounded-md bg-destructive/10 p-4 text-destructive mb-4">
+                      <p className="text-sm font-medium">Error</p>
+                      <p className="text-sm">{error}</p>
+                    </div>
+                  )}
+
+                  {practiceType === "check-in" && checkInResult && (
+                    <div className="mb-6 space-y-4">
+                      {!checkInResult.smart_summary ? (
+                        <p className="text-sm text-muted-foreground">
+                          No smart summary was produced for this session.
+                        </p>
+                      ) : (
+                        <>
+                          <SummaryCardBlock
+                            subTitle="Insight"
+                            title={checkInResult.smart_summary.output.insight}
+                            isFocused
+                          />
+                          <SummaryCardBlock
+                            subTitle="Advice"
+                            title={checkInResult.smart_summary.output.advice}
+                            isFocused
+                          />
+                          <SummaryCardBlock
+                            subTitle="Affirmation"
+                            title={checkInResult.smart_summary.output.affirmation}
+                            isFocused
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCheckInResonance("like")}
+                            >
+                              Like
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCheckInResonance("dislike")}
+                            >
+                              Dislike
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCheckInResonance("echo_save")}
+                            >
+                              Echo save
+                            </Button>
+                          </div>
+                        </>
+                      )}
+
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Active memory items ({checkInItems.length})
+                        </p>
+                        {checkInItems.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No items yet. Run onboarding first.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {checkInItems.map((item) => (
+                              <div
+                                key={item.id}
+                                className="rounded-md border bg-muted/20 p-3 text-sm"
+                              >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant="secondary">{item.type}</Badge>
+                                  <Badge variant="outline">
+                                    conf {item.confidence.toFixed(2)}
+                                  </Badge>
+                                  <Badge variant="outline">{item.status}</Badge>
+                                </div>
+                                <p className="mt-2">
+                                  {item.statement_user_facing ?? item.statement_internal}
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={isApplyingFeedback}
+                                    onClick={() =>
+                                      handleCheckInTruthReaction(item, "yes_that_fits")
+                                    }
+                                  >
+                                    Yes
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={isApplyingFeedback}
+                                    onClick={() =>
+                                      handleCheckInTruthReaction(item, "not_quite")
+                                    }
+                                  >
+                                    Not quite
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={isApplyingFeedback}
+                                    onClick={() =>
+                                      handleCheckInTruthReaction(item, "not_anymore")
+                                    }
+                                  >
+                                    Not anymore
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={isApplyingFeedback}
+                                    onClick={() => handleCheckInTruthReaction(item, "hide")}
+                                  >
+                                    Hide
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {hasParsedSummaryBlocks &&
+                    parsedAiSummary &&
+                    !(practiceType === "check-in" && checkInResult) && (
+                    <div className="space-y-3 mb-6">
+                      {parsedAiSummary.summary ? (
+                        <SummaryCardBlock
+                          subTitle="Summary"
+                          title={parsedAiSummary.summary}
+                          isFocused
+                        />
+                      ) : (
+                        <>
+                          {parsedAiSummary.insight && (
+                            <SummaryCardBlock
+                              subTitle="Insight"
+                              title={parsedAiSummary.insight}
+                              isFocused
+                            />
+                          )}
+                          {parsedAiSummary.advice && (
+                            <SummaryCardBlock
+                              subTitle="Advice"
+                              title={parsedAiSummary.advice}
+                              isFocused
+                            />
+                          )}
+                          {parsedAiSummary.affirmation && (
+                            <SummaryCardBlock
+                              subTitle="Affirmation"
+                              title={parsedAiSummary.affirmation}
+                              isFocused
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {aiResponseData != null ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Full JSON response
+                      </p>
+                      <pre className="rounded-md bg-muted p-4 overflow-auto max-h-[360px] text-sm font-mono">
+                        {JSON.stringify(aiResponseData, null, 2)}
+                      </pre>
+                    </div>
+                  ) : null}
+
+                  {aiResponseData == null && !error && !loading && (
+                    <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                      <p className="text-center">
+                        Fill out the practice form and click &quot;Analyze with AI&quot; to see results
+                      </p>
+                    </div>
+                  )}
+
+                  {loading && (
+                    <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                        <p>Processing...</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           <Card>
-            <CardHeader>
-              <CardTitle>AI Response</CardTitle>
-              <CardDescription>Generated insight, advice, and affirmation</CardDescription>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
+              <div>
+                <CardTitle className="text-base">Completed practices</CardTitle>
+                <CardDescription>
+                  Full AI + memory debug history (localStorage, max {PRACTICE_HISTORY_LIMIT})
+                </CardDescription>
+              </div>
+              {practiceHistory.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const exportedAt = new Date().toISOString();
+                      downloadTextFile(
+                        completedPracticeFilename(
+                          "mindjar-completed-practices",
+                          "all",
+                          exportedAt,
+                        ),
+                        buildCompletedPracticeDebugText({
+                          exportedAt,
+                          entries: practiceHistory,
+                        }),
+                      );
+                    }}
+                  >
+                    Download all .txt
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      savePracticeHistory([]);
+                      setPracticeHistory([]);
+                    }}
+                  >
+                    Clear list
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
-              {error && (
-                <div className="rounded-md bg-destructive/10 p-4 text-destructive mb-4">
-                  <p className="text-sm font-medium">Error</p>
-                  <p className="text-sm">{error}</p>
-                </div>
-              )}
-
-              {hasParsedSummaryBlocks && parsedAiSummary && (
-                <div className="space-y-3 mb-6">
-                  {parsedAiSummary.summary ? (
-                    <SummaryCardBlock
-                      subTitle="Summary"
-                      title={parsedAiSummary.summary}
-                      isFocused
-                    />
-                  ) : (
-                    <>
-                      {parsedAiSummary.insight && (
-                        <SummaryCardBlock
-                          subTitle="Insight"
-                          title={parsedAiSummary.insight}
-                          isFocused
-                        />
-                      )}
-                      {parsedAiSummary.advice && (
-                        <SummaryCardBlock
-                          subTitle="Advice"
-                          title={parsedAiSummary.advice}
-                          isFocused
-                        />
-                      )}
-                      {parsedAiSummary.affirmation && (
-                        <SummaryCardBlock
-                          subTitle="Affirmation"
-                          title={parsedAiSummary.affirmation}
-                          isFocused
-                        />
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {aiResponseData != null ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Full JSON response
-                  </p>
-                  <pre className="rounded-md bg-muted p-4 overflow-auto max-h-[360px] text-sm font-mono">
-                    {JSON.stringify(aiResponseData, null, 2)}
-                  </pre>
-                </div>
-              ) : null}
-
-              {aiResponseData == null && !error && !loading && (
-                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                  <p className="text-center">
-                    Fill out the practice form and click &quot;Analyze with AI&quot; to see results
-                  </p>
-                </div>
-              )}
-
-              {loading && (
-                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    <p>Processing...</p>
-                  </div>
-                </div>
+              {practiceHistory.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No entries yet — run Analyze with AI.</p>
+              ) : (
+                <ul className="space-y-4 text-sm">
+                  {practiceHistory.map((h) => (
+                    <li
+                      key={h.id}
+                      className="border-b border-border pb-4 last:border-0 last:pb-0"
+                    >
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(h.at).toLocaleString()}
+                      </div>
+                      <div className="font-medium">
+                        {h.practiceType}
+                        {h.practiceLabel ? ` · ${h.practiceLabel}` : ""}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => {
+                          const exportedAt = new Date().toISOString();
+                          downloadTextFile(
+                            completedPracticeFilename(
+                              "mindjar-completed-practice",
+                              `${h.practiceType}-${h.practiceLabel || h.id}`,
+                              exportedAt,
+                            ),
+                            buildCompletedPracticeDebugText({
+                              exportedAt,
+                              entries: [h],
+                            }),
+                          );
+                        }}
+                      >
+                        Download this .txt
+                      </Button>
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                          AI response (JSON)
+                        </summary>
+                        <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs font-mono">
+                          {JSON.stringify(h.aiResponse, null, 2)}
+                        </pre>
+                      </details>
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                          Full practice + memory debug (JSON)
+                        </summary>
+                        <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs font-mono">
+                          {JSON.stringify(
+                            {
+                              practiceInput: h.practiceInput,
+                              memoryRequest: h.memoryRequest,
+                              memoryBefore: h.memoryBefore,
+                              memoryResult: h.memoryResult,
+                              memoryAfter: h.memoryAfter,
+                            },
+                            null,
+                            2,
+                          )}
+                        </pre>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>
         </div>
-      )}
-
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
-          <div>
-            <CardTitle className="text-base">Completed practices</CardTitle>
-            <CardDescription>
-              Simple list with full AI response (localStorage, max {PRACTICE_HISTORY_LIMIT})
-            </CardDescription>
-          </div>
-          {practiceHistory.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                savePracticeHistory([]);
-                setPracticeHistory([]);
-              }}
-            >
-              Clear list
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          {practiceHistory.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No entries yet — run Analyze with AI.</p>
-          ) : (
-            <ul className="space-y-4 text-sm">
-              {practiceHistory.map((h) => (
-                <li
-                  key={h.id}
-                  className="border-b border-border pb-4 last:border-0 last:pb-0"
-                >
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(h.at).toLocaleString()}
-                  </div>
-                  <div className="font-medium">
-                    {h.practiceType}
-                    {h.practiceLabel ? ` · ${h.practiceLabel}` : ""}
-                  </div>
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                      AI response (JSON)
-                    </summary>
-                    <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs font-mono">
-                      {JSON.stringify(h.aiResponse, null, 2)}
-                    </pre>
-                  </details>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
