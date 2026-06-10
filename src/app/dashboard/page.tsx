@@ -146,7 +146,7 @@ export default function Page() {
                 </TabsContent>
               </Tabs>
               <h2 className="text-2xl font-bold px-4 lg:px-6">Onboarding</h2>
-              <Onboarding analyticsVersion={analyticsVersion} />
+              <Onboarding />
               <h2 className="text-2xl font-bold px-4 lg:px-6">Dashboard</h2>
               <DashboardV2 analyticsVersion={analyticsVersion} />
               {/* <h2 className="text-2xl font-bold px-4 lg:px-6">

@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Activity, TrendingDown } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
+import { Activity, TrendingDown, Users } from "lucide-react";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
   Card,
@@ -32,7 +32,7 @@ export const description = "A step area chart";
 
 const chartConfig = {
   desktop: {
-    label: "Desktop",
+    label: "Users",
     color: "var(--chart-1)",
     icon: Activity,
   },
@@ -42,11 +42,15 @@ interface ChartAreaStepProps {
   title: string;
   pages: string[];
   pageData?: Record<string, number>;
+  /** Human-readable labels for chart axis and previews (key = page id). */
+  pageLabels?: Record<string, string>;
   timeRange?: string;
   /** When true, loads `/screens/<page>.png` under each step (see public/screens/README.md). */
   stepScreens?: boolean;
   /** Base path for step images (no trailing slash). Default: `/screens`. */
   stepScreensBasePath?: string;
+  /** Extra context under step preview (e.g. practice exits from Tasks). */
+  stepAnnotations?: Record<string, string>;
 }
 
 function stepScreenSrc(
@@ -59,17 +63,21 @@ function stepScreenSrc(
 
 function StepScreenPreview({
   page,
+  label,
   src,
+  annotation,
 }: {
   page: string;
+  label: string;
   src: string;
+  annotation?: string;
 }) {
   const [failed, setFailed] = React.useState(false);
 
   return (
     <div className="flex w-full flex-col items-center gap-1.5">
       <span className="max-w-[140px] truncate text-center text-xs font-medium text-muted-foreground">
-        {page}
+        {label}
       </span>
       <div className="flex h-[200px] w-full max-w-[160px] items-center justify-center overflow-hidden rounded-md border bg-muted/40">
         {failed ? (
@@ -89,6 +97,11 @@ function StepScreenPreview({
           />
         )}
       </div>
+      {annotation ? (
+        <pre className="mt-1 max-w-[160px] whitespace-pre-wrap rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[10px] leading-snug text-amber-950 dark:text-amber-100">
+          {annotation}
+        </pre>
+      ) : null}
     </div>
   );
 }
@@ -110,10 +123,13 @@ export function ChartAreaStep({
   title,
   pages,
   pageData,
+  pageLabels,
   timeRange,
   stepScreens = false,
   stepScreensBasePath = "/screens",
+  stepAnnotations,
 }: ChartAreaStepProps) {
+  const labelFor = (page: string) => pageLabels?.[page] ?? page;
   // Build chart data from pages array and pageData
   const chartData = pages.map((page) => {
     // For "1.2" page, use the value from "1" if available
@@ -131,33 +147,12 @@ export function ChartAreaStep({
     }
     return {
       page,
+      pageLabel: labelFor(page),
       count,
     };
   });
 
-  // Calculate drop-off percentage relative to the previous step
-  // First page is always 0% (no drop-off yet), subsequent pages show drop-off vs previous page
-  const chartDataWithPercentages = chartData.map((item, index) => {
-    if (index === 0) {
-      // First page always 0% drop-off (baseline at bottom)
-      return {
-        ...item,
-        dropOffPercentage: 0,
-      };
-    } else {
-      const previousCount = chartData[index - 1]?.count ?? 0;
-      const dropOffPercentage =
-        previousCount > 0
-          ? Math.max(((previousCount - item.count) / previousCount) * 100, 0)
-          : 0;
-      return {
-        ...item,
-        dropOffPercentage: Math.round(dropOffPercentage * 10) / 10, // Round to 1 decimal
-      };
-    }
-  });
-
-  // Calculate drop-off rates and find worst page
+  // Find worst drop-off step (still useful for the footer summary)
   let worstPage = pages[0];
   let maxDropOff = 0;
 
@@ -176,6 +171,11 @@ export function ChartAreaStep({
     }
   }
 
+  const peakCount = chartData.reduce(
+    (max, item) => (item.count > max ? item.count : max),
+    0
+  );
+
   /** Enough width per category so labels are not crushed; narrow viewports scroll horizontally. */
   const chartMinWidthPx = Math.max(pages.length * 80, 360);
 
@@ -184,7 +184,7 @@ export function ChartAreaStep({
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>
-          Showing drop-off percentage from the previous step for{" "}
+          Showing number of users who viewed each step for{" "}
           {getPeriodDescription(timeRange)}
         </CardDescription>
       </CardHeader>
@@ -200,7 +200,7 @@ export function ChartAreaStep({
           >
           <AreaChart
             accessibilityLayer
-            data={chartDataWithPercentages}
+            data={chartData}
             margin={{
               left: 8,
               right: 12,
@@ -210,7 +210,7 @@ export function ChartAreaStep({
           >
             <CartesianGrid vertical={false} />
             <XAxis
-              dataKey="page"
+              dataKey="pageLabel"
               type="category"
               tickLine={false}
               axisLine={false}
@@ -225,13 +225,27 @@ export function ChartAreaStep({
               textAnchor="end"
               tickFormatter={(value) => String(value)}
             />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              width={40}
+              tick={{
+                fontSize: 11,
+                fill: "hsl(var(--muted-foreground))",
+              }}
+              tickFormatter={(value: number) => value.toLocaleString()}
+              allowDecimals={false}
+            />
             <ChartTooltip
               cursor={false}
               content={<ChartTooltipContent hideLabel />}
-              formatter={(value: number) => [`${value}%`, "Drop-off"]}
+              formatter={(value: number) => [
+                value.toLocaleString(),
+                "Users",
+              ]}
             />
             <Area
-              dataKey="dropOffPercentage"
+              dataKey="count"
               type="step"
               fill="var(--color-desktop)"
               fillOpacity={0.4}
@@ -256,7 +270,9 @@ export function ChartAreaStep({
                 >
                   <StepScreenPreview
                     page={page}
+                    label={labelFor(page)}
                     src={stepScreenSrc(page, stepScreensBasePath)}
+                    annotation={stepAnnotations?.[page]}
                   />
                 </div>
               ))}
@@ -267,16 +283,22 @@ export function ChartAreaStep({
       <CardFooter>
         <div className="flex w-full items-start gap-2 text-sm">
           <div className="grid gap-2">
-            {maxDropOff > 0 ? (
+            {peakCount > 0 ? (
               <div className="flex items-center gap-2 leading-none font-medium">
-                Highest drop-off: {worstPage} ({maxDropOff.toFixed(1)}%)
-                <TrendingDown className="h-4 w-4" />
+                Peak users: {peakCount.toLocaleString()}
+                <Users className="h-4 w-4" />
               </div>
             ) : (
               <div className="flex items-center gap-2 leading-none font-medium text-muted-foreground">
-                No drop-off data available
+                No view data available
               </div>
             )}
+            {maxDropOff > 0 ? (
+              <div className="flex items-center gap-2 leading-none text-muted-foreground">
+                Highest drop-off: {labelFor(worstPage)} ({maxDropOff.toFixed(1)}%)
+                <TrendingDown className="h-4 w-4" />
+              </div>
+            ) : null}
           </div>
         </div>
       </CardFooter>

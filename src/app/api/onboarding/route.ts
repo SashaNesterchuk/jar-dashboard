@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  getOnboardingFlowFilter,
+  ONBOARDING_V2_PAGE_ORDER,
+  parseOnboardingFlowVersion,
+  type OnboardingFlowVersion,
+} from "@/lib/onboarding-analytics";
 
 const POSTHOG_HOST = process.env.POSTHOG_HOST;
 const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
@@ -15,21 +21,66 @@ interface PostHogQueryResponse {
   };
 }
 
-function getVersionFilter(analyticsVersion: "v1" | "v2"): string {
-  if (analyticsVersion === "v2") {
-    return `JSONExtractString(properties,'analytics_version') = 'v2'`;
-  }
-  return `(JSONExtractString(properties,'analytics_version') != 'v2' OR JSONExtractString(properties,'analytics_version') = '')`;
+function getFlowFilter(onboardingFlowVersion: OnboardingFlowVersion): string {
+  return getOnboardingFlowFilter(onboardingFlowVersion);
 }
 
-async function queryPostHogArray(
+// In-memory response cache to avoid hammering PostHog on tab switches / rerenders.
+// PostHog free tier is rate-limited (HTTP 429), so we serve a fresh response only
+// every CACHE_TTL_MS while still allowing manual cache busting via a redeploy.
+const CACHE_TTL_MS = 60_000;
+type CacheEntry = { value: unknown; expiresAt: number };
+const responseCache = new Map<string, CacheEntry>();
+
+function getCachedResponse(key: string): unknown | null {
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    responseCache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function setCachedResponse(key: string, value: unknown): void {
+  responseCache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+function parseRetryAfterMs(
+  errorText: string,
+  retryAfterHeader: string | null
+): number {
+  // Honour `Retry-After` header (seconds) if present.
+  if (retryAfterHeader) {
+    const seconds = Number(retryAfterHeader);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.min(seconds * 1000 + 500, 30_000);
+    }
+  }
+  // Fall back to parsing PostHog throttle detail string, e.g.
+  // "Request was throttled. Expected available in 27 seconds."
+  try {
+    const json = JSON.parse(errorText) as { detail?: string };
+    const match = json.detail?.match(/(\d+)\s*seconds?/i);
+    if (match) {
+      const seconds = Number(match[1]);
+      if (Number.isFinite(seconds) && seconds > 0) {
+        return Math.min(seconds * 1000 + 500, 30_000);
+      }
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return 2_000;
+}
+
+async function fetchPostHogRaw(
   query: string
 ): Promise<Array<Array<number | string>>> {
   if (!POSTHOG_API_KEY) {
     throw new Error("POSTHOG_API_KEY is not configured");
   }
 
-  // Trim any whitespace from API key
   const apiKey = POSTHOG_API_KEY.trim();
   const url = `${POSTHOG_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query/`;
   const body = JSON.stringify({
@@ -39,67 +90,49 @@ async function queryPostHogArray(
     },
   });
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body,
-  });
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body,
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`PostHog API error: ${response.status} - ${errorText}`);
+    if (response.status === 429 && attempt < MAX_ATTEMPTS) {
+      const errorText = await response.text();
+      const waitMs = parseRetryAfterMs(
+        errorText,
+        response.headers.get("Retry-After")
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      continue;
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`PostHog API error: ${response.status} - ${errorText}`);
+    }
+
+    const data: PostHogQueryResponse = await response.json();
+    const results = data.results || data.responseData?.results;
+    return results ?? [];
   }
 
-  const data: PostHogQueryResponse = await response.json();
-  const results = data.results || data.responseData?.results;
+  throw new Error("PostHog API error: exhausted retries");
+}
 
-  if (!results || results.length === 0) {
-    return [];
-  }
-
-  return results;
+async function queryPostHogArray(
+  query: string
+): Promise<Array<Array<number | string>>> {
+  return fetchPostHogRaw(query);
 }
 
 async function queryPostHog(query: string): Promise<number> {
-  if (!POSTHOG_API_KEY) {
-    throw new Error("POSTHOG_API_KEY is not configured");
-  }
-
-  // Trim any whitespace from API key
-  const apiKey = POSTHOG_API_KEY.trim();
-  const url = `${POSTHOG_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query/`;
-  const body = JSON.stringify({
-    query: {
-      kind: "HogQLQuery",
-      query,
-    },
-  });
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`PostHog API error: ${response.status} - ${errorText}`);
-  }
-
-  const data: PostHogQueryResponse = await response.json();
-  const results = data.results || data.responseData?.results;
-
-  if (!results || results.length === 0) {
-    return 0;
-  }
-
-  // Extract value from results array
+  const results = await fetchPostHogRaw(query);
+  if (results.length === 0) return 0;
   const value = results[0]?.[0];
   return typeof value === "number" ? value : Number(value) || 0;
 }
@@ -219,10 +252,10 @@ function buildOnboardingQuery(
   endIso: string,
   action: "started" | "completed",
   environment: string = "production",
-  analyticsVersion: "v1" | "v2" = "v2"
+  onboardingFlowVersion: OnboardingFlowVersion = "v2"
 ): string {
-  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
-    analyticsVersion
+  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getFlowFilter(
+    onboardingFlowVersion
   )}`;
 
   if (action === "started") {
@@ -237,10 +270,10 @@ function buildDurationQuery(
   startIso: string,
   endIso: string,
   environment: string = "production",
-  analyticsVersion: "v1" | "v2" = "v2"
+  onboardingFlowVersion: OnboardingFlowVersion = "v2"
 ): string {
-  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
-    analyticsVersion
+  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getFlowFilter(
+    onboardingFlowVersion
   )}`;
   return `SELECT avg(toFloatOrDefault(JSONExtractString(properties,'total_duration_seconds'), 0.0)) AS value FROM events WHERE event = 'onboarding_step' AND JSONExtractString(properties,'action') = 'completed' AND ${baseFilters}`;
 }
@@ -251,10 +284,10 @@ function buildPageViewQuery(
   pageName: string,
   premiumActive?: boolean,
   environment: string = "production",
-  analyticsVersion: "v1" | "v2" = "v2"
+  onboardingFlowVersion: OnboardingFlowVersion = "v2"
 ): string {
-  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
-    analyticsVersion
+  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getFlowFilter(
+    onboardingFlowVersion
   )}`;
 
   let premiumFilter = "";
@@ -274,33 +307,193 @@ function buildPageViewQuery(
 }
 
 /**
- * Order matches `pagesSteps` in jar/components/common/v2/Onboarding/Onboarding.tsx
- * (second `ps2` step omitted — same page_name as first).
+ * Single grouped query returning per-page (and per-premium-state) view counts.
+ * Replaces N separate `buildPageViewQuery` calls to avoid PostHog 429 throttling.
  */
-const ONBOARDING_V2_PAGE_ORDER = [
-  "hello",
-  "name",
-  "1",
-  "2",
-  "summaryConclusion",
-  "summaryConclusionQuestion",
-  "summaryAI",
-  "ps2",
-  "1.2",
-  "ps1",
-  "noPremium1",
-  "notification",
-  "tasks",
-] as const;
+function buildGroupedPageViewQuery(
+  startIso: string,
+  endIso: string,
+  environment: string = "production",
+  onboardingFlowVersion: OnboardingFlowVersion = "v2"
+): string {
+  const baseFilters = `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getFlowFilter(
+    onboardingFlowVersion
+  )}`;
+
+  // Normalise `premium_active` so we treat both bool (JSONExtractBool=1) and
+  // stringified ("true") representations the same way (matches the per-page
+  // queries in `buildPageViewQuery`).
+  const premiumExpr = `(JSONExtractBool(properties,'premium_active') = 1 OR JSONExtractString(properties,'premium_active') = 'true')`;
+
+  return `SELECT JSONExtractString(properties,'page_name') AS page_name, ${premiumExpr} AS is_premium, uniqExact(JSONExtractString(properties,'session_id')) AS value FROM events WHERE event = 'onboarding_step' AND (JSONExtractString(properties,'action') = 'viewed' OR JSONExtractString(properties,'action') = 'completed') AND ${baseFilters} GROUP BY page_name, is_premium`;
+}
+
+type ReviewAnalytics = {
+  modalShown: number;
+  rateTapped: number;
+  dismissedNotNow: number;
+  dismissedSwipe: number;
+  ratings: Record<string, number>;
+  completedRated: number;
+  completedNotNow: number;
+  completedSwipe: number;
+};
+
+function reviewBaseFilters(
+  startIso: string,
+  endIso: string,
+  environment: string,
+  onboardingFlowVersion: OnboardingFlowVersion
+): string {
+  return `timestamp >= toDateTime('${startIso}','Europe/Warsaw') AND timestamp < toDateTime('${endIso}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getFlowFilter(
+    onboardingFlowVersion
+  )}`;
+}
+
+async function fetchTaskPracticeOpens(
+  startIso: string,
+  endIso: string,
+  environment: string,
+  onboardingFlowVersion: OnboardingFlowVersion
+): Promise<{ totalSessions: number; byType: Record<string, number> }> {
+  const base = reviewBaseFilters(
+    startIso,
+    endIso,
+    environment,
+    onboardingFlowVersion
+  );
+
+  const totalQuery = `SELECT uniqExact(JSONExtractString(properties,'session_id')) AS value FROM events WHERE event = 'onboarding_step' AND JSONExtractString(properties,'page_name') = 'tasks' AND (JSONExtractString(properties,'action') = 'task_practice_opened' OR (JSONExtractString(properties,'action') = 'element_pressed' AND JSONExtractString(properties,'element_type') = 'practice_card')) AND ${base}`;
+
+  const byTypeQuery = `
+    SELECT
+      coalesce(
+        nullIf(JSONExtractString(properties,'practice_type'), ''),
+        arrayElement(splitByChar('|', JSONExtractString(properties,'element_value')), 2)
+      ) AS practice_type,
+      uniqExact(JSONExtractString(properties,'session_id')) AS count
+    FROM events
+    WHERE event = 'onboarding_step'
+      AND JSONExtractString(properties,'page_name') = 'tasks'
+      AND (
+        JSONExtractString(properties,'action') = 'task_practice_opened'
+        OR (
+          JSONExtractString(properties,'action') = 'element_pressed'
+          AND JSONExtractString(properties,'element_type') = 'practice_card'
+        )
+      )
+      AND ${base}
+    GROUP BY practice_type
+    HAVING practice_type != ''
+    ORDER BY count DESC
+  `;
+
+  const [totalSessions, typeRows] = await Promise.all([
+    queryPostHog(totalQuery),
+    queryPostHogArray(byTypeQuery),
+  ]);
+
+  const byType: Record<string, number> = {};
+  for (const row of typeRows) {
+    const type = String(row[0] ?? "").trim();
+    if (!type) continue;
+    byType[type] = Number(row[1]) || 0;
+  }
+
+  return {
+    totalSessions: Math.round(totalSessions),
+    byType,
+  };
+}
+
+async function fetchReviewAnalytics(
+  startIso: string,
+  endIso: string,
+  environment: string,
+  onboardingFlowVersion: OnboardingFlowVersion
+): Promise<ReviewAnalytics> {
+  const base = reviewBaseFilters(
+    startIso,
+    endIso,
+    environment,
+    onboardingFlowVersion
+  );
+
+  const modalShownQuery = `SELECT uniqExact(JSONExtractString(properties,'session_id')) AS value FROM events WHERE event = 'onboarding_review_modal_shown' AND ${base}`;
+  const rateTappedQuery = `SELECT count() AS value FROM events WHERE event = 'onboarding_review_rate_tapped' AND ${base}`;
+  const ratingsQuery = `SELECT JSONExtractString(properties,'rating') AS rating, count() AS count FROM events WHERE event = 'onboarding_review_rate_tapped' AND ${base} GROUP BY rating ORDER BY rating`;
+  const dismissedQuery = `SELECT JSONExtractString(properties,'reason') AS reason, count() AS count FROM events WHERE event = 'onboarding_review_dismissed' AND ${base} GROUP BY reason`;
+  const completedQuery = `SELECT JSONExtractString(properties,'element_type') AS element_type, count() AS count FROM events WHERE event = 'onboarding_step' AND JSONExtractString(properties,'page_name') = 'review' AND JSONExtractString(properties,'action') = 'completed' AND ${base} GROUP BY element_type`;
+
+  const [
+    modalShown,
+    rateTapped,
+    ratingRows,
+    dismissedRows,
+    completedRows,
+  ] = await Promise.all([
+    queryPostHog(modalShownQuery),
+    queryPostHog(rateTappedQuery),
+    queryPostHogArray(ratingsQuery),
+    queryPostHogArray(dismissedQuery),
+    queryPostHogArray(completedQuery),
+  ]);
+
+  const ratings: Record<string, number> = {
+    "1": 0,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+  };
+  for (const row of ratingRows) {
+    const key = String(row[0] ?? "").trim();
+    if (key in ratings) {
+      ratings[key] = Number(row[1]) || 0;
+    }
+  }
+
+  let dismissedNotNow = 0;
+  let dismissedSwipe = 0;
+  for (const row of dismissedRows) {
+    const reason = String(row[0] ?? "");
+    const count = Number(row[1]) || 0;
+    if (reason === "not_now") dismissedNotNow += count;
+    else if (reason === "swipe") dismissedSwipe += count;
+  }
+
+  let completedRated = 0;
+  let completedNotNow = 0;
+  let completedSwipe = 0;
+  for (const row of completedRows) {
+    const elementType = String(row[0] ?? "");
+    const count = Number(row[1]) || 0;
+    if (elementType === "review_rated") completedRated += count;
+    else if (elementType === "review_not_now") completedNotNow += count;
+    else if (elementType === "review_swipe") completedSwipe += count;
+  }
+
+  return {
+    modalShown: Math.round(modalShown),
+    rateTapped: Math.round(rateTapped),
+    dismissedNotNow,
+    dismissedSwipe,
+    ratings,
+    completedRated,
+    completedNotNow,
+    completedSwipe,
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
     const environment = "production";
     const searchParams = request.nextUrl.searchParams;
     const timeRange = searchParams.get("timeRange") || "7d";
-    const analyticsVersionParam = searchParams.get("analyticsVersion") || "v2";
-    const analyticsVersion: "v1" | "v2" =
-      analyticsVersionParam === "v1" ? "v1" : "v2";
+    const onboardingFlowVersion = parseOnboardingFlowVersion(
+      searchParams.get("onboardingFlowVersion") ??
+        searchParams.get("analyticsVersion")
+    );
 
     // Validate timeRange
     if (!["7d", "30d", "90d"].includes(timeRange)) {
@@ -308,6 +501,12 @@ export async function GET(request: NextRequest) {
         { error: "Invalid timeRange. Must be 7d, 30d, or 90d" },
         { status: 400 }
       );
+    }
+
+    const cacheKey = `onboarding:${onboardingFlowVersion}:${timeRange}:${environment}`;
+    const cached = getCachedResponse(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     // Get time windows
@@ -320,20 +519,20 @@ export async function GET(request: NextRequest) {
       currentWindow.end.toISOString(),
       "started",
       environment,
-      analyticsVersion
+      onboardingFlowVersion
     );
     const completedQuery = buildOnboardingQuery(
       currentWindow.start.toISOString(),
       currentWindow.end.toISOString(),
       "completed",
       environment,
-      analyticsVersion
+      onboardingFlowVersion
     );
     const durationQuery = buildDurationQuery(
       currentWindow.start.toISOString(),
       currentWindow.end.toISOString(),
       environment,
-      analyticsVersion
+      onboardingFlowVersion
     );
 
     // Build queries for comparison period
@@ -342,29 +541,34 @@ export async function GET(request: NextRequest) {
       comparisonWindow.end.toISOString(),
       "started",
       environment,
-      analyticsVersion
+      onboardingFlowVersion
     );
     const completedComparisonQuery = buildOnboardingQuery(
       comparisonWindow.start.toISOString(),
       comparisonWindow.end.toISOString(),
       "completed",
       environment,
-      analyticsVersion
+      onboardingFlowVersion
     );
     const durationComparisonQuery = buildDurationQuery(
       comparisonWindow.start.toISOString(),
       comparisonWindow.end.toISOString(),
       environment,
-      analyticsVersion
+      onboardingFlowVersion
     );
 
-    // Build trial data queries (shared v1 / v2)
-    const baseFiltersForTrials = `timestamp >= toDateTime('${currentWindow.start.toISOString()}','Europe/Warsaw') AND timestamp < toDateTime('${currentWindow.end.toISOString()}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getVersionFilter(
-      analyticsVersion
+    const baseFiltersForTrials = `timestamp >= toDateTime('${currentWindow.start.toISOString()}','Europe/Warsaw') AND timestamp < toDateTime('${currentWindow.end.toISOString()}','Europe/Warsaw') AND JSONExtractString(properties,'consent_status') = 'granted' AND coalesce(JSONExtractString(properties,'environment'),'production') = '${environment}' AND ${getFlowFilter(
+      onboardingFlowVersion
     )}`;
 
     const paywall1ViewsQuery = `SELECT count() AS value FROM events WHERE event = 'onboarding_paywall_action' AND JSONExtractString(properties,'action') = 'viewed' AND JSONExtractString(properties,'variant') = 'price1' AND ${baseFiltersForTrials}`;
     const paywall2ViewsQuery = `SELECT count() AS value FROM events WHERE event = 'onboarding_paywall_action' AND JSONExtractString(properties,'action') = 'viewed' AND JSONExtractString(properties,'variant') = 'price2' AND ${baseFiltersForTrials}`;
+    const paywall3ViewsQuery = `SELECT count() AS value FROM events WHERE event = 'onboarding_paywall_action' AND JSONExtractString(properties,'action') = 'viewed' AND JSONExtractString(properties,'variant') = 'price3' AND ${baseFiltersForTrials}`;
+
+    const paywallVariants =
+      onboardingFlowVersion === "v2"
+        ? "('price3')"
+        : "('price1', 'price2')";
 
     const trialStartedQuery = `
       SELECT
@@ -375,7 +579,7 @@ export async function GET(request: NextRequest) {
       WHERE event = 'onboarding_paywall_action'
         AND JSONExtractString(properties,'action') = 'trial_started'
         AND ${baseFiltersForTrials}
-        AND JSONExtractString(properties,'variant') IN ('price1', 'price2')
+        AND JSONExtractString(properties,'variant') IN ${paywallVariants}
         AND JSONExtractString(properties,'variant') IS NOT NULL
         AND JSONExtractString(properties,'variant') != ''
       GROUP BY variant, period
@@ -391,7 +595,7 @@ export async function GET(request: NextRequest) {
       WHERE event = 'onboarding_paywall_action'
         AND JSONExtractString(properties,'action') = 'purchase_success'
         AND ${baseFiltersForTrials}
-        AND JSONExtractString(properties,'variant') IN ('price1', 'price2')
+        AND JSONExtractString(properties,'variant') IN ${paywallVariants}
         AND JSONExtractString(properties,'variant') IS NOT NULL
         AND JSONExtractString(properties,'variant') != ''
       GROUP BY variant, period
@@ -409,6 +613,7 @@ export async function GET(request: NextRequest) {
     let avgDurationComparison: number;
     let paywall1Views: number;
     let paywall2Views: number;
+    let paywall3Views: number;
     let trialStartedResults: Array<Array<number | string>>;
     let purchaseSuccessResults: Array<Array<number | string>>;
 
@@ -417,197 +622,87 @@ export async function GET(request: NextRequest) {
       premium?: Record<string, number>;
       flow?: Record<string, number>;
     };
+    let reviewData: ReviewAnalytics | null = null;
+    let taskPracticeOpens: { totalSessions: number; byType: Record<string, number> } | null =
+      null;
 
-    if (analyticsVersion === "v2") {
-      const v2PageQueries = ONBOARDING_V2_PAGE_ORDER.map((pageName) =>
-        buildPageViewQuery(
-          curStart,
-          curEnd,
-          pageName,
-          undefined,
-          environment,
-          analyticsVersion
-        )
+    if (onboardingFlowVersion === "v2") {
+      const groupedPageQuery = buildGroupedPageViewQuery(
+        curStart,
+        curEnd,
+        environment,
+        onboardingFlowVersion
       );
-
-      const combined = await Promise.all([
+      const [
+        v2Started,
+        v2StartedComparison,
+        v2Completed,
+        v2CompletedComparison,
+        v2AvgDuration,
+        v2AvgDurationComparison,
+        groupedPageRows,
+        v2Paywall3Views,
+        v2TrialStartedResults,
+        v2PurchaseSuccessResults,
+        v2ReviewData,
+        v2TaskPracticeOpens,
+      ] = await Promise.all([
         queryPostHog(startedQuery),
         queryPostHog(startedComparisonQuery),
         queryPostHog(completedQuery),
         queryPostHog(completedComparisonQuery),
         queryPostHog(durationQuery),
         queryPostHog(durationComparisonQuery),
-        ...v2PageQueries.map((q) => queryPostHog(q)),
-        queryPostHog(paywall1ViewsQuery),
-        queryPostHog(paywall2ViewsQuery),
+        queryPostHogArray(groupedPageQuery),
+        queryPostHog(paywall3ViewsQuery),
         queryPostHogArray(trialStartedQuery),
         queryPostHogArray(purchaseSuccessQuery),
+        fetchReviewAnalytics(curStart, curEnd, environment, onboardingFlowVersion),
+        fetchTaskPracticeOpens(curStart, curEnd, environment, onboardingFlowVersion),
       ]);
 
-      started = combined[0] as number;
-      startedComparison = combined[1] as number;
-      completed = combined[2] as number;
-      completedComparison = combined[3] as number;
-      avgDuration = combined[4] as number;
-      avgDurationComparison = combined[5] as number;
+      started = v2Started;
+      startedComparison = v2StartedComparison;
+      completed = v2Completed;
+      completedComparison = v2CompletedComparison;
+      avgDuration = v2AvgDuration;
+      avgDurationComparison = v2AvgDurationComparison;
+      paywall1Views = 0;
+      paywall2Views = 0;
+      paywall3Views = v2Paywall3Views;
+      trialStartedResults = v2TrialStartedResults;
+      purchaseSuccessResults = v2PurchaseSuccessResults;
+      reviewData = v2ReviewData;
+      taskPracticeOpens = v2TaskPracticeOpens;
 
-      const nPages = ONBOARDING_V2_PAGE_ORDER.length;
-      const pageSlice = combined.slice(6, 6 + nPages);
-      paywall1Views = combined[6 + nPages] as number;
-      paywall2Views = combined[7 + nPages] as number;
-      trialStartedResults = combined[8 + nPages] as Array<
-        Array<number | string>
-      >;
-      purchaseSuccessResults = combined[9 + nPages] as Array<
-        Array<number | string>
-      >;
+      // Aggregate per page across premium / non-premium states for v2 funnel.
+      const pageCountByName = new Map<string, number>();
+      for (const row of groupedPageRows) {
+        const pageName = String(row[0] ?? "");
+        const count = Number(row[2]) || 0;
+        if (!pageName) continue;
+        pageCountByName.set(
+          pageName,
+          (pageCountByName.get(pageName) ?? 0) + count
+        );
+      }
 
       pagesData = {
         flow: Object.fromEntries(
-          ONBOARDING_V2_PAGE_ORDER.map((p, i) => [
+          ONBOARDING_V2_PAGE_ORDER.map((p) => [
             p,
-            Math.round(Number(pageSlice[i]) || 0),
+            Math.round(pageCountByName.get(p) ?? 0),
           ])
         ),
       };
     } else {
-      const viewedHelloQuery = buildPageViewQuery(
+      // Single grouped query covering all v1 onboarding pages, split by
+      // `premium_active` so we can reconstruct the premium / no-premium funnels.
+      const groupedPageQuery = buildGroupedPageViewQuery(
         curStart,
         curEnd,
-        "hello",
-        undefined,
         environment,
-        analyticsVersion
-      );
-      const viewed1Query = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "1",
-        undefined,
-        environment,
-        analyticsVersion
-      );
-      const viewed2Query = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "2",
-        undefined,
-        environment,
-        analyticsVersion
-      );
-      const viewed3Query = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "3",
-        undefined,
-        environment,
-        analyticsVersion
-      );
-      const viewedPs1Query = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "ps1",
-        undefined,
-        environment,
-        analyticsVersion
-      );
-
-      const viewedNoPremium1_noPremiumQuery = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "noPremium1",
-        false,
-        environment,
-        analyticsVersion
-      );
-      const viewedNoPremium2_noPremiumQuery = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "noPremium2",
-        false,
-        environment,
-        analyticsVersion
-      );
-      const viewedBreathing_noPremiumQuery = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "breathing",
-        false,
-        environment,
-        analyticsVersion
-      );
-      const viewedDiary1_noPremiumQuery = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "diary1",
-        false,
-        environment,
-        analyticsVersion
-      );
-      const viewedQuestions1_noPremiumQuery = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "questions1",
-        false,
-        environment,
-        analyticsVersion
-      );
-      const viewedNotification_noPremiumQuery = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "notification",
-        undefined,
-        environment,
-        analyticsVersion
-      );
-      const viewedPs2_noPremiumQuery = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "ps2",
-        false,
-        environment,
-        analyticsVersion
-      );
-
-      const viewedPremium1Query = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "premium1",
-        true,
-        environment,
-        analyticsVersion
-      );
-      const viewedPremium2Query = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "premium2",
-        true,
-        environment,
-        analyticsVersion
-      );
-      const viewedPremium3Query = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "premium3",
-        true,
-        environment,
-        analyticsVersion
-      );
-      const viewedSummaryQuery = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "summary",
-        true,
-        environment,
-        analyticsVersion
-      );
-      const viewedNoPremium1_premiumQuery = buildPageViewQuery(
-        curStart,
-        curEnd,
-        "noPremium1",
-        true,
-        environment,
-        analyticsVersion
+        onboardingFlowVersion
       );
 
       const [
@@ -617,23 +712,7 @@ export async function GET(request: NextRequest) {
         v1CompletedComparison,
         v1AvgDuration,
         v1AvgDurationComparison,
-        viewedHello,
-        viewed1,
-        viewed2,
-        viewed3,
-        viewedPs1,
-        viewedNoPremium1_noPremium,
-        viewedNoPremium2_noPremium,
-        viewedBreathing_noPremium,
-        viewedDiary1_noPremium,
-        viewedQuestions1_noPremium,
-        viewedNotification_noPremium,
-        viewedPs2_noPremium,
-        viewedPremium1,
-        viewedPremium2,
-        viewedPremium3,
-        viewedSummary,
-        viewedNoPremium1_premium,
+        groupedPageRows,
         v1Paywall1Views,
         v1Paywall2Views,
         v1TrialStartedResults,
@@ -645,23 +724,7 @@ export async function GET(request: NextRequest) {
         queryPostHog(completedComparisonQuery),
         queryPostHog(durationQuery),
         queryPostHog(durationComparisonQuery),
-        queryPostHog(viewedHelloQuery),
-        queryPostHog(viewed1Query),
-        queryPostHog(viewed2Query),
-        queryPostHog(viewed3Query),
-        queryPostHog(viewedPs1Query),
-        queryPostHog(viewedNoPremium1_noPremiumQuery),
-        queryPostHog(viewedNoPremium2_noPremiumQuery),
-        queryPostHog(viewedBreathing_noPremiumQuery),
-        queryPostHog(viewedDiary1_noPremiumQuery),
-        queryPostHog(viewedQuestions1_noPremiumQuery),
-        queryPostHog(viewedNotification_noPremiumQuery),
-        queryPostHog(viewedPs2_noPremiumQuery),
-        queryPostHog(viewedPremium1Query),
-        queryPostHog(viewedPremium2Query),
-        queryPostHog(viewedPremium3Query),
-        queryPostHog(viewedSummaryQuery),
-        queryPostHog(viewedNoPremium1_premiumQuery),
+        queryPostHogArray(groupedPageQuery),
         queryPostHog(paywall1ViewsQuery),
         queryPostHog(paywall2ViewsQuery),
         queryPostHogArray(trialStartedQuery),
@@ -676,42 +739,69 @@ export async function GET(request: NextRequest) {
       avgDurationComparison = v1AvgDurationComparison;
       paywall1Views = v1Paywall1Views;
       paywall2Views = v1Paywall2Views;
+      paywall3Views = 0;
       trialStartedResults = v1TrialStartedResults;
       purchaseSuccessResults = v1PurchaseSuccessResults;
 
+      // Build lookup: page_name -> { premium, noPremium, any }.
+      const byPage = new Map<
+        string,
+        { premium: number; noPremium: number; any: number }
+      >();
+      for (const row of groupedPageRows) {
+        const pageName = String(row[0] ?? "");
+        if (!pageName) continue;
+        // `is_premium` is a boolean expression in HogQL that comes back as 0/1
+        // (or rarely the string "1"/"0"); normalise to a boolean.
+        const isPremium = Number(row[1]) === 1;
+        const count = Number(row[2]) || 0;
+        const entry =
+          byPage.get(pageName) ?? { premium: 0, noPremium: 0, any: 0 };
+        if (isPremium) entry.premium += count;
+        else entry.noPremium += count;
+        entry.any += count;
+        byPage.set(pageName, entry);
+      }
+
+      const any = (page: string): number => byPage.get(page)?.any ?? 0;
+      const premium = (page: string): number =>
+        byPage.get(page)?.premium ?? 0;
+      const noPremium = (page: string): number =>
+        byPage.get(page)?.noPremium ?? 0;
+
       const practiceTotal = Math.round(
-        viewedBreathing_noPremium +
-          viewedDiary1_noPremium +
-          viewedQuestions1_noPremium
+        noPremium("breathing") +
+          noPremium("diary1") +
+          noPremium("questions1")
       );
 
       pagesData = {
         noPremium: {
-          hello: Math.round(viewedHello),
-          "1": Math.round(viewed1),
-          "1.2": Math.round(viewed1),
-          "2": Math.round(viewed2),
-          "3": Math.round(viewed3),
-          ps1: Math.round(viewedPs1),
-          noPremium1: Math.round(viewedNoPremium1_noPremium),
-          noPremium2: Math.round(viewedNoPremium2_noPremium),
+          hello: Math.round(any("hello")),
+          "1": Math.round(any("1")),
+          "1.2": Math.round(any("1")),
+          "2": Math.round(any("2")),
+          "3": Math.round(any("3")),
+          ps1: Math.round(any("ps1")),
+          noPremium1: Math.round(noPremium("noPremium1")),
+          noPremium2: Math.round(noPremium("noPremium2")),
           practice: practiceTotal,
-          notification: Math.round(viewedNotification_noPremium),
-          ps2: Math.round(viewedPs2_noPremium),
+          notification: Math.round(any("notification")),
+          ps2: Math.round(noPremium("ps2")),
         },
         premium: {
-          hello: Math.round(viewedHello),
-          "1": Math.round(viewed1),
-          "1.2": Math.round(viewed1),
-          "2": Math.round(viewed2),
-          "3": Math.round(viewed3),
-          ps1: Math.round(viewedPs1),
-          premium1: Math.round(viewedPremium1),
-          premium2: Math.round(viewedPremium2),
-          premium3: Math.round(viewedPremium3),
-          summary: Math.round(viewedSummary),
-          noPremium1: Math.round(viewedNoPremium1_premium),
-          notification: Math.round(viewedNotification_noPremium),
+          hello: Math.round(any("hello")),
+          "1": Math.round(any("1")),
+          "1.2": Math.round(any("1")),
+          "2": Math.round(any("2")),
+          "3": Math.round(any("3")),
+          ps1: Math.round(any("ps1")),
+          premium1: Math.round(premium("premium1")),
+          premium2: Math.round(premium("premium2")),
+          premium3: Math.round(premium("premium3")),
+          summary: Math.round(premium("summary")),
+          noPremium1: Math.round(premium("noPremium1")),
+          notification: Math.round(any("notification")),
         },
       };
     }
@@ -725,31 +815,33 @@ export async function GET(request: NextRequest) {
     const completedDelta = calculateDelta(completed, completedComparison);
     const durationDelta = calculateDelta(avgDuration, avgDurationComparison);
 
-    // Process trial data
-    // Initialize trial data structure
-    const trialsData: {
-      ps1: {
-        views: number;
-        trialsStarted: { monthly: number; annual: number; total: number };
-        purchases: { monthly: number; annual: number; total: number };
-      };
-      ps2: {
-        views: number;
-        trialsStarted: { monthly: number; annual: number; total: number };
-        purchases: { monthly: number; annual: number; total: number };
-      };
-    } = {
-      ps1: {
-        views: Math.round(paywall1Views),
-        trialsStarted: { monthly: 0, annual: 0, total: 0 },
-        purchases: { monthly: 0, annual: 0, total: 0 },
-      },
-      ps2: {
-        views: Math.round(paywall2Views),
-        trialsStarted: { monthly: 0, annual: 0, total: 0 },
-        purchases: { monthly: 0, annual: 0, total: 0 },
-      },
+    type PaywallTrialStats = {
+      views: number;
+      trialsStarted: { monthly: number; annual: number; total: number };
+      purchases: { monthly: number; annual: number; total: number };
     };
+
+    const emptyPaywallStats = (): PaywallTrialStats => ({
+      views: 0,
+      trialsStarted: { monthly: 0, annual: 0, total: 0 },
+      purchases: { monthly: 0, annual: 0, total: 0 },
+    });
+
+    const trialsData: {
+      ps1: PaywallTrialStats;
+      ps2: PaywallTrialStats;
+      ps3?: PaywallTrialStats;
+    } = {
+      ps1: { ...emptyPaywallStats(), views: Math.round(paywall1Views) },
+      ps2: { ...emptyPaywallStats(), views: Math.round(paywall2Views) },
+    };
+
+    if (onboardingFlowVersion === "v2") {
+      trialsData.ps3 = {
+        ...emptyPaywallStats(),
+        views: Math.round(paywall3Views),
+      };
+    }
 
     // Process trial started results
     trialStartedResults.forEach((row) => {
@@ -779,6 +871,13 @@ export async function GET(request: NextRequest) {
           trialsData.ps2.trialsStarted.annual += countValue;
         }
         trialsData.ps2.trialsStarted.total += countValue;
+      } else if (variant === "price3" && trialsData.ps3) {
+        if (period === "monthly") {
+          trialsData.ps3.trialsStarted.monthly += countValue;
+        } else if (period === "annual") {
+          trialsData.ps3.trialsStarted.annual += countValue;
+        }
+        trialsData.ps3.trialsStarted.total += countValue;
       }
     });
 
@@ -810,10 +909,18 @@ export async function GET(request: NextRequest) {
           trialsData.ps2.purchases.annual += countValue;
         }
         trialsData.ps2.purchases.total += countValue;
+      } else if (variant === "price3" && trialsData.ps3) {
+        if (period === "monthly") {
+          trialsData.ps3.purchases.monthly += countValue;
+        } else if (period === "annual") {
+          trialsData.ps3.purchases.annual += countValue;
+        }
+        trialsData.ps3.purchases.total += countValue;
       }
     });
 
-    return NextResponse.json({
+    const responseBody = {
+      onboardingFlowVersion,
       started: {
         value: Math.round(started),
         previous: Math.round(startedComparison),
@@ -836,7 +943,12 @@ export async function GET(request: NextRequest) {
       },
       pages: pagesData,
       trials: trialsData,
-    });
+      review: reviewData,
+      taskPracticeOpens,
+    };
+
+    setCachedResponse(cacheKey, responseBody);
+    return NextResponse.json(responseBody);
   } catch (error) {
     console.error("Onboarding API error:", error);
     return NextResponse.json(

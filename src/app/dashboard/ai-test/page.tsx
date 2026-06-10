@@ -58,6 +58,7 @@ import {
   projectMemoryScreen,
   type MemoryCardProjection,
 } from "@/lib/memory/ui/memoryView";
+import { buildMemoryImplementationContextText } from "@/lib/memory/debug/contextGuide";
 import {
   pickSummaryFieldText,
   SummaryCardBlock,
@@ -2360,6 +2361,20 @@ export default function AITestPage() {
                       }}
                     >
                       Download .txt
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const exportedAt = new Date().toISOString();
+                        downloadTextFile(
+                          `mindjar-memory-context-${exportedAt.replace(/[:.]/g, "-")}.txt`,
+                          buildMemoryImplementationContextText(exportedAt),
+                        );
+                      }}
+                    >
+                      Download context .txt
                     </Button>
                     <Button
                       variant="outline"
